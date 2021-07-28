@@ -70,26 +70,21 @@ cd ${WORKDIR}
 rm indel_realignment_giraffe_grch38_pgrc_decoys_july7.HG003.swarm
 for CHR in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y ; do
     echo -e "module load singularity GATK/3.8-1 samtools \
-    && cd ${WORKDIR}/grch38_pgrc_decoys_july7_HG003_bam_by_chr/ \
-    && samtools addreplacerg -@ 32 -O BAM -r ID:1 -r LB:lib1 -r SM:HG003 -r PL:illumina -r PU:unit1 raw.chr${CHR}.bam > raw.chr${CHR}.gatk_ready.bam \
-    && samtools index -@ 32 raw.chr${CHR}.gatk_ready.bam \
-    && java -jar \$GATK_JAR -T RealignerTargetCreator -R ${WORKDIR}/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.hprc_july7.fna -L GRCh38.chr${CHR} -I raw.chr${CHR}.gatk_ready.bam -o ${CHR}.intervals \
-    && awk -F '[:-]' 'BEGIN { OFS = \"\t\" } { if( \$3 == \"\") { print \$1, \$2-1, \$2 } else { print \$1, \$2-1, \$3}}' ${CHR}.intervals > ${CHR}.intervals.bed \
-    && singularity run -H \${PWD}:\${HOME} --pwd \${HOME} docker://dceoy/abra2:latest --targets ${CHR}.intervals.bed --in raw.chr${CHR}.gatk_ready.bam --out raw.chr${CHR}.indel_realigned.bam --ref GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.hprc_july7.fna --threads 16" >> indel_realignment_giraffe_grch38_pgrc_decoys_july7.HG003.swarm
+    && cd ${WORKDIR} \
+    && samtools addreplacerg -@ 32 -O BAM -r ID:1 -r LB:lib1 -r SM:HG003 -r PL:illumina -r PU:unit1 grch38_pgrc_decoys_july7_HG003_bam_by_chr/raw.chr${CHR}.bam > grch38_pgrc_decoys_july7_HG003_bam_by_chr/raw.chr${CHR}.gatk_ready.bam \
+    && samtools index -@ 32 grch38_pgrc_decoys_july7_HG003_bam_by_chr/raw.chr${CHR}.gatk_ready.bam \
+    && java -jar \$GATK_JAR -T RealignerTargetCreator -R ${WORKDIR}/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.hprc_july7.fna -L GRCh38.chr${CHR} -I grch38_pgrc_decoys_july7_HG003_bam_by_chr/raw.chr${CHR}.gatk_ready.bam -o grch38_pgrc_decoys_july7_HG003_bam_by_chr/${CHR}.intervals \
+    && awk -F '[:-]' 'BEGIN { OFS = \"\t\" } { if( \$3 == \"\") { print \$1, \$2-1, \$2 } else { print \$1, \$2-1, \$3}}' grch38_pgrc_decoys_july7_HG003_bam_by_chr/${CHR}.intervals > grch38_pgrc_decoys_july7_HG003_bam_by_chr/${CHR}.intervals.bed \
+    && singularity run -H \${PWD}:\${HOME} --pwd \${HOME} docker://dceoy/abra2:latest --targets grch38_pgrc_decoys_july7_HG003_bam_by_chr/${CHR}.intervals.bed --in grch38_pgrc_decoys_july7_HG003_bam_by_chr/raw.chr${CHR}.gatk_ready.bam --out grch38_pgrc_decoys_july7_HG003_bam_by_chr/raw.chr${CHR}.indel_realigned.bam --ref GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.hprc_july7.fna --threads 16 && samtools index -@ 32 grch38_pgrc_decoys_july7_HG003_bam_by_chr/raw.chr${CHR}.indel_realigned.bam" >> indel_realignment_giraffe_grch38_pgrc_decoys_july7.HG003.swarm
 done
 
 indel_realign_swarm_jobid=$(swarm -f indel_realignment_giraffe_grch38_pgrc_decoys_july7.HG003.swarm -t 16 -g 100 --partition=norm --time=12:00:00 --module singularity,GATK/3.8-1,samtools)
 
 ## SETUP AND RUN DEEPVARIANT
-cd ${WORKDIR}/grch38_pgrc_decoys_july7_HG003_bam_by_chr
-for CHR in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y ; do
-    samtools index -@ 32 raw.chr${CHR}.indel_realigned.bam
-done
-
 cd ${WORKDIR}
 rm deepvariant_calling.minmapq0.swarm
 for CHR in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y ; do
-    echo -e "cd ${WORKDIR}; singularity run --nv -H \${PWD}:\${HOME} --pwd \${HOME} docker://google/deepvariant:1.1.0-gpu /opt/deepvariant/bin/run_deepvariant --make_examples_extra_args 'min_mapping_quality=0' --model_type=WGS --regions GRCh38.chr${CHR} --ref=GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.hprc_july7.fna --reads=grch38_pgrc_decoys_july7_HG003_bam_by_chr/raw.chr${CHR}.indel_realigned.bam --output_vcf=grch38_pgrc_decoys_july7_HG003_bam_by_chr/chr${CHR}.deepvariant.vcf.gz --output_gvcf=grch38_pgrc_decoys_july7_HG003_bam_by_chr/chr${CHR}.g.vcf.gz --intermediate_results_dir=grch38_pgrc_decoys_july7_HG003_bam_by_chr/tmp_deepvariant_chr${CHR} --num_shards=16" >> deepvariant_calling.minmapq0.swarm
+    echo -e "module load singularity; cd ${WORKDIR}; singularity run --nv -H \${PWD}:\${HOME} --pwd \${HOME} docker://google/deepvariant:1.1.0-gpu /opt/deepvariant/bin/run_deepvariant --make_examples_extra_args 'min_mapping_quality=0' --model_type=WGS --regions GRCh38.chr${CHR} --ref=GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.hprc_july7.fna --reads=grch38_pgrc_decoys_july7_HG003_bam_by_chr/raw.chr${CHR}.indel_realigned.bam --output_vcf=grch38_pgrc_decoys_july7_HG003_bam_by_chr/chr${CHR}.deepvariant.vcf.gz --output_gvcf=grch38_pgrc_decoys_july7_HG003_bam_by_chr/chr${CHR}.g.vcf.gz --intermediate_results_dir=grch38_pgrc_decoys_july7_HG003_bam_by_chr/tmp_deepvariant_chr${CHR} --num_shards=16" >> deepvariant_calling.minmapq0.swarm
 done
 
 cd ${WORKDIR}
