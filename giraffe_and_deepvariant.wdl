@@ -1,8 +1,8 @@
 version 1.0
 
-### vg_multi_map.wdl ###
+### giraffe_and_deepvariant.wdl ###
 ## Author: Charles Markello
-## Description: Core VG mapping workflow for single sample datasets.
+## Description: Core VG Giraffe mapping and DeepVariant calling workflow for single sample datasets.
 ## Reference: https://github.com/vgteam/vg/wiki
 
 workflow vgMultiMap {
