@@ -8,6 +8,7 @@ mkdir -p $WORKDIR && cd $WORKDIR
 wget -c https://storage.googleapis.com/cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.hprc_july7.fna .
 wget -c https://storage.googleapis.com/cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/GRCh38-f1g-90-mc-jul7.xg .
 wget -c https://storage.googleapis.com/cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/GRCh38-f1g-90-mc-jul7.gbwt .
+wget -c https://storage.googleapis.com/cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/GRCh38-f1g-90-mc-jul7.gg .
 wget -c https://storage.googleapis.com/cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/GRCh38-freeze1.cactus.f1g-90-mc-jul7.k29.w11.paths.min .
 wget -c https://storage.googleapis.com/cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/GRCh38-freeze1.cactus.f1g-90-mc-jul7.dist .
 wget -c https://storage.googleapis.com/cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/HG003.novaseq.pcr-free.35x.R1.fastq.gz .
