@@ -249,7 +249,6 @@ task runVGGIRAFFE {
         File in_ref_dict
         String in_vg_container
         String in_sample_name
-        Boolean surject_output
         Int in_map_cores
         Int in_map_disk
         String in_map_mem
