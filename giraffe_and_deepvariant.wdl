@@ -128,7 +128,7 @@ workflow vgMultiMap {
         }
         call runAbraRealigner {
             input:
-                in_sample_name=SAMPLE_NAME_CHILD,
+                in_sample_name=SAMPLE_NAME,
                 in_bam_file=deepvariant_caller_input_files.left,
                 in_bam_index_file=deepvariant_caller_input_files.right,
                 in_target_bed_file=runGATKRealignerTargetCreator.realigner_target_bed,
@@ -562,7 +562,7 @@ task concatClippedVCFChunks {
     input {
         String in_sample_name
         Array[File] in_clipped_vcf_chunk_files
-        Int in_vgcall_disk
+        Int in_call_disk
         Int in_call_mem
     }
 
