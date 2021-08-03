@@ -14,13 +14,10 @@ workflow vgMultiMap {
         Int READS_PER_CHUNK = 20000000                  # Number of reads contained in each mapping chunk (20000000 for wgs)
         File? PATH_LIST_FILE                            # (OPTIONAL) Text file where each line is a path name in the XG index
         File XG_FILE                                    # Path to .xg index file
-        File GCSA_FILE                                  # Path to .gcsa index file
-        File GCSA_LCP_FILE                              # Path to .gcsa.lcp index file
         File GBWT_FILE                                  # Path to .gbwt index file
         File GGBWT_FILE                                 # Path to .gg index file
         File DIST_FILE                                  # Path to .dist index file
         File MIN_FILE                                   # Path to .min index file
-        File SNARLS_FILE                                # Path to .snarls index file
         File REF_FILE                                   # Path to .fa cannonical reference fasta (only grch37/hg19 currently supported)
         File REF_INDEX_FILE                             # Path to .fai index of the REF_FILE fasta reference
         File REF_DICT_FILE                              # Path to .dict file of the REF_FILE fasta reference
