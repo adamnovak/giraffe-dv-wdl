@@ -56,7 +56,9 @@ workflow vgMultiMap {
         call extractPathNames {
             input:
                 in_xg_file=XG_FILE,
-                in_vg_container=VG_CONTAINER
+                in_vg_container=VG_CONTAINER,
+                in_extract_disk=MAP_DISK,
+                in_extract_mem=MAP_MEM
         }
     }
     File pipeline_path_list_file = select_first([PATH_LIST_FILE, extractPathNames.output_path_list])
@@ -215,6 +217,8 @@ task extractPathNames {
     input {
         File in_xg_file
         String in_vg_container
+        Int in_extract_disk
+        Int in_extract_mem
     }
 
     command {
@@ -228,8 +232,8 @@ task extractPathNames {
         File output_path_list = "path_list.txt"
     }
     runtime {
-        memory: "2 GB"
-        disks: "local-disk 50 SSD"
+        memory: in_extract_mem + " GB"
+        disks: "local-disk " + in_extract_disk + " SSD"
         docker: in_vg_container
     }
 }
