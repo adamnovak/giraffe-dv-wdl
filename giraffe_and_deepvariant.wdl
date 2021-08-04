@@ -279,7 +279,7 @@ task runVGGIRAFFE {
           -g ~{in_ggbwt_file} \
           -d ~{in_dist_file} \
           -m ~{in_min_file} \
-          -t ~{in_map_cores} > ~{in_sample_name}.${READ_CHUNK_ID}.bam && \
+          -t ~{in_map_cores} > ~{in_sample_name}.${READ_CHUNK_ID}.bam
     >>>
     output {
         File chunk_bam_file = glob("*bam")[0]
