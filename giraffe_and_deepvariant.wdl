@@ -78,7 +78,6 @@ workflow vgMultiMap {
                 in_ggbwt_file=GGBWT_FILE,
                 in_dist_file=DIST_FILE,
                 in_min_file=MIN_FILE,
-                in_ref_dict=REF_DICT_FILE,
                 in_sample_name=SAMPLE_NAME,
                 in_map_cores=MAP_CORES,
                 in_map_disk=MAP_DISK,
@@ -247,7 +246,6 @@ task runVGGIRAFFE {
         File in_ggbwt_file
         File in_dist_file
         File in_min_file
-        File in_ref_dict
         String in_vg_container
         String in_sample_name
         Int in_map_cores
@@ -272,7 +270,6 @@ task runVGGIRAFFE {
           --read-group "ID:1 LB:lib1 SM:~{in_sample_name} PL:illumina PU:unit1" \
           --sample "~{in_sample_name}" \
           --output-format BAM \
-          --ref-paths ~{in_ref_dict} \
           -f ~{in_left_read_pair_chunk_file} -f ~{in_right_read_pair_chunk_file} \
           -x ~{in_xg_file} \
           -H ~{in_gbwt_file} \
