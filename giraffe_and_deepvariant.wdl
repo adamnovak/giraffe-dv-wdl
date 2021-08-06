@@ -431,7 +431,7 @@ task runGATKRealignerTargetCreator {
 
         ln -f -s ~{in_bam_file} input_bam_file.bam
         ln -f -s ~{in_bam_index_file} input_bam_file.bam.bai
-        CONTIG_ID=($(ls ~{in_bam_file} | awk -F'.' '{print $(NF-1)}'))
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g))
 
         # Reference and its index must be adjacent and not at arbitrary paths
         # the runner gives.
@@ -450,7 +450,7 @@ task runGATKRealignerTargetCreator {
           -I input_bam_file.bam \
           --out forIndelRealigner.intervals
 
-        awk -F '[:-]' 'BEGIN { OFS = "\t" } { if( $3 == "") { print $1, $2-1, $2 } else { print $1, $2-1, $3}}' forIndelRealigner.intervals > ~{in_sample_name}.${CONTIG}.intervals.bed
+        awk -F '[:-]' 'BEGIN { OFS = "\t" } { if( $3 == "") { print $1, $2-1, $2 } else { print $1, $2-1, $3}}' forIndelRealigner.intervals > ~{in_sample_name}.${CONTIG_ID}.intervals.bed
     >>>
     output {
         File realigner_target_bed = glob("*.bed")[0]
@@ -486,7 +486,7 @@ task runAbraRealigner {
 
         ln -f -s ~{in_bam_file} input_bam_file.bam
         ln -f -s ~{in_bam_index_file} input_bam_file.bam.bai
-        CONTIG_ID=($(ls ~{in_bam_file} | awk -F'.' '{print $(NF-1)}'))
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g))
 
         # Reference and its index must be adjacent and not at arbitrary paths
         # the runner gives.
@@ -538,7 +538,7 @@ task runDeepVariant {
         
         ln -s ~{in_bam_file} input_bam_file.child.bam
         ln -s ~{in_bam_file_index} input_bam_file.child.bam.bai
-        CONTIG_ID=($(ls ~{in_bam_file} | awk -F'.' '{print $(NF-2)}'))
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.indel_realigned.bam$//g))
 
         # Reference and its index must be adjacent and not at arbitrary paths
         # the runner gives.
