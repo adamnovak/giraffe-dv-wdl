@@ -433,12 +433,17 @@ task runGATKRealignerTargetCreator {
         ln -f -s ~{in_bam_index_file} input_bam_file.bam.bai
         CONTIG_ID=($(ls ~{in_bam_file} | awk -F'.' '{print $(NF-1)}'))
 
+        # Reference and its index must be adjacent and not at arbitrary paths
+        # the runner gives.
+        ln -f -s ~{in_reference_file} reference.fa
+        ln -f -s ~{in_reference_index_file} reference.fa.fai
+
         java -jar /usr/GenomeAnalysisTK.jar -T RealignerTargetCreator \
           --remove_program_records \
           -drf DuplicateRead \
           --disable_bam_indexing \
           -nt "32" \
-          -R ~{in_reference_file} \
+          -R reference.fa \
           -L ${CONTIG_ID} \
           -I input_bam_file.bam \
           --out forIndelRealigner.intervals
@@ -480,11 +485,17 @@ task runAbraRealigner {
         ln -f -s ~{in_bam_file} input_bam_file.bam
         ln -f -s ~{in_bam_index_file} input_bam_file.bam.bai
         CONTIG_ID=($(ls ~{in_bam_file} | awk -F'.' '{print $(NF-1)}'))
+
+        # Reference and its index must be adjacent and not at arbitrary paths
+        # the runner gives.
+        ln -f -s ~{in_reference_file} reference.fa
+        ln -f -s ~{in_reference_index_file} reference.fa.fai
+
         java -Xmx20G -jar /opt/abra2/abra2.jar \
           --targets ~{in_target_bed_file} \
           --in input_bam_file.bam \
           --out ~{in_sample_name}.${CONTIG_ID}.indel_realigned.bam \
-          --ref ~{in_reference_file} \
+          --ref reference.fa \
           --index \
           --threads 32
     >>>
@@ -527,13 +538,17 @@ task runDeepVariant {
         ln -s ~{in_bam_file_index} input_bam_file.child.bam.bai
         CONTIG_ID=($(ls ~{in_bam_file} | awk -F'.' '{print $(NF-2)}'))
 
-        
+        # Reference and its index must be adjacent and not at arbitrary paths
+        # the runner gives.
+        ln -f -s ~{in_reference_file} reference.fa
+        ln -f -s ~{in_reference_index_file} reference.fa.fai
+
         /opt/deepvariant/bin/run_deepvariant \
         --make_examples_extra_args 'min_mapping_quality=0' \
         --model_type=WGS \
         --regions ${CONTIG_ID} \
-        --ref=~{in_reference_file} \
-        --reads=~{in_bam_file} \
+        --ref=reference.fa \
+        --reads=input_bam_file.child.bam \
         --output_vcf="~{in_sample_name}_deeptrio.vcf.gz" \
         --output_gvcf="~{in_sample_name}_deeptrio.g.vcf.gz" \
         --intermediate_results_dir=tmp_deepvariant \

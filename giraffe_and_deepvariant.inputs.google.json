@@ -1,9 +1,9 @@
 {
-  "vgMultiMap.XG_FILE": "gs://cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/GRCh38-f1g-90-mc-jul7.xg",
-  "vgMultiMap.GBWT_FILE": "gs://cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/GRCh38-f1g-90-mc-jul7.gbwt",
-  "vgMultiMap.GGBWT_FILE": "gs://cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/GRCh38-f1g-90-mc-jul7.gg",
-  "vgMultiMap.MIN_FILE": "gs://cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/GRCh38-freeze1.cactus.f1g-90-mc-jul7.k29.w11.paths.recached.min",
-  "vgMultiMap.DIST_FILE": "gs://cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/GRCh38-freeze1.cactus.f1g-90-mc-jul7.dist",
+  "vgMultiMap.XG_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GRCh38-f1g-90-mc-jul7.gfaffix.xg",
+  "vgMultiMap.GBWT_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GRCh38-f1g-90-mc-jul7.gfaffix.gbwt",
+  "vgMultiMap.GGBWT_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GRCh38-f1g-90-mc-jul7.gfaffix.gg",
+  "vgMultiMap.MIN_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GRCh38-freeze1.cactus.f1g-90-mc-jul7-gfaffix.k29.w11.paths.min",
+  "vgMultiMap.DIST_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GRCh38-freeze1.cactus.f1g-90-mc-jul7-gfaffix.dist",
   "vgMultiMap.REF_FILE": "gs://cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.hprc_july7.fna",
   "vgMultiMap.REF_DICT_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.hprc_july7.dict",
   "vgMultiMap.REF_INDEX_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.hprc_july7.fna.fai",
@@ -11,6 +11,6 @@
   "vgMultiMap.INPUT_READ_FILE_1": "gs://cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/HG003.novaseq.pcr-free.35x.R1.fastq.gz",
   "vgMultiMap.INPUT_READ_FILE_2": "gs://cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/HG003.novaseq.pcr-free.35x.R2.fastq.gz",
   "vgMultiMap.SPLIT_READ_DISK": "60",
-  "vgMultiMap.MAP_DISK": "120",
-  "vgMultiMap.MAP_MEM": "80"
+  "vgMultiMap.MAP_DISK": "200",
+  "vgMultiMap.MAP_MEM": "120"
 }
