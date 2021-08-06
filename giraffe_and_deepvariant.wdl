@@ -18,9 +18,6 @@ workflow vgMultiMap {
         File GGBWT_FILE                                 # Path to .gg index file
         File DIST_FILE                                  # Path to .dist index file
         File MIN_FILE                                   # Path to .min index file
-        File REF_FILE                                   # Path to .fa cannonical reference fasta (only grch37/hg19 currently supported)
-        File REF_INDEX_FILE                             # Path to .fai index of the REF_FILE fasta reference
-        File REF_DICT_FILE                              # Path to .dict file of the REF_FILE fasta reference
         Int SPLIT_READ_CORES = 8
         Int SPLIT_READ_DISK = 10
         Int MAP_CORES = 16
@@ -62,6 +59,26 @@ workflow vgMultiMap {
         }
     }
     File pipeline_path_list_file = select_first([PATH_LIST_FILE, extractPathNames.output_path_list])
+    
+    # To make sure that we have a FASTA reference with a contig set that
+    # exactly matches the graph, we generate it ourselves, from the graph.
+    call extractReference {
+        input:
+            in_xg_file=XG_FILE,
+            in_vg_container=VG_CONTAINER,
+            in_extract_disk=MAP_DISK,
+            in_extract_mem=MAP_MEM
+    }
+    File reference_file = extractReference.reference_file
+    
+    call indexReference {
+        input:
+            in_reference_file=reference_file,
+            in_index_disk=MAP_DISK,
+            in_index_mem=MAP_MEM
+    }
+    File reference_index_file = indexReference.reference_index_file
+    File reference_dict_file = indexReference.reference_dict_file
 
     ################################################################
     # Distribute vg mapping opperation over each chunked read pair #
@@ -78,22 +95,8 @@ workflow vgMultiMap {
                 in_ggbwt_file=GGBWT_FILE,
                 in_dist_file=DIST_FILE,
                 in_min_file=MIN_FILE,
+                in_ref_dict=reference_dict_file,
                 in_sample_name=SAMPLE_NAME,
-                in_map_cores=MAP_CORES,
-                in_map_disk=MAP_DISK,
-                in_map_mem=MAP_MEM
-        }
-        # Because we can't pass the dict at alignment time, we need to
-        # "reorder" the single-contig BAMs into having the right dict, or GATK
-        # will bail and complain they are out of order based solely on the
-        # reference info in the BAM header.
-        call reorderBAMFile {
-            input:
-                in_sample_name=SAMPLE_NAME,
-                in_bam_chunk_file=runVGGIRAFFE.chunk_bam_file,
-                in_reference_file=REF_FILE,
-                in_reference_index_file=REF_INDEX_FILE,
-                in_reference_dict_file=REF_DICT_FILE,
                 in_map_cores=MAP_CORES,
                 in_map_disk=MAP_DISK,
                 in_map_mem=MAP_MEM
@@ -101,7 +104,7 @@ workflow vgMultiMap {
         call sortBAMFile {
             input:
                 in_sample_name=SAMPLE_NAME,
-                in_bam_chunk_file=reorderBAMFile.reordered_bam_file,
+                in_bam_chunk_file=runVGGIRAFFE.chunk_bam_file,
                 in_map_cores=MAP_CORES,
                 in_map_disk=MAP_DISK,
                 in_map_mem=MAP_MEM,
@@ -136,9 +139,9 @@ workflow vgMultiMap {
                 in_sample_name=SAMPLE_NAME,
                 in_bam_file=deepvariant_caller_input_files.left,
                 in_bam_index_file=deepvariant_caller_input_files.right,
-                in_reference_file=REF_FILE,
-                in_reference_index_file=REF_INDEX_FILE,
-                in_reference_dict_file=REF_DICT_FILE
+                in_reference_file=reference_file,
+                in_reference_index_file=reference_index_file,
+                in_reference_dict_file=reference_dict_file
         }
         call runAbraRealigner {
             input:
@@ -146,16 +149,16 @@ workflow vgMultiMap {
                 in_bam_file=deepvariant_caller_input_files.left,
                 in_bam_index_file=deepvariant_caller_input_files.right,
                 in_target_bed_file=runGATKRealignerTargetCreator.realigner_target_bed,
-                in_reference_file=REF_FILE,
-                in_reference_index_file=REF_INDEX_FILE
+                in_reference_file=reference_file,
+                in_reference_index_file=reference_index_file
         }
         call runDeepVariant {
             input:
                 in_sample_name=SAMPLE_NAME,
                 in_bam_file=runAbraRealigner.indel_realigned_bam,
                 in_bam_file_index=runAbraRealigner.indel_realigned_bam_index,
-                in_reference_file=REF_FILE,
-                in_reference_index_file=REF_INDEX_FILE,
+                in_reference_file=reference_file,
+                in_reference_index_file=reference_index_file,
                 in_call_cores=CALL_CORES,
                 in_call_disk=CALL_DISK,
                 in_call_mem=CALL_MEM
@@ -253,6 +256,61 @@ task extractPathNames {
     }
 }
 
+task extractReference {
+    input {
+        File in_xg_file
+        String in_vg_container
+        Int in_extract_disk
+        Int in_extract_mem
+    }
+
+    command {
+        set -eux -o pipefail
+
+        vg paths \
+            --extract-fasta \
+            --xg ${in_xg_file} > ref.fa
+    }
+    output {
+        File reference_file = "ref.fa"
+    }
+    runtime {
+        memory: in_extract_mem + " GB"
+        disks: "local-disk " + in_extract_disk + " SSD"
+        docker: in_vg_container
+    }
+}
+
+task indexReference {
+    input {
+        File in_reference_file
+        Int in_index_mem
+        Int in_index_disk
+    }
+
+    command <<<
+        set -eux -o pipefail
+        
+        ln -s ~{in_reference_file} ref.fa
+        
+        samtools faidx ref.fa
+        
+        # Save a reference copy by making the dict now
+        java -jar /usr/picard/picard.jar CreateSequenceDictionary \
+          R=ref.fa \
+          O=ref.dict
+    >>>
+    output {
+        File reference_index_file = "ref.fa.fai"
+        File reference_dict_file = "ref.dict"
+    }
+    runtime {
+        memory: in_index_mem + " GB"
+        disks: "local-disk " + in_index_disk + " SSD"
+        docker: "quay.io/cmarkello/samtools_picard@sha256:e484603c61e1753c349410f0901a7ba43a2e5eb1c6ce9a240b7f737bba661eb4"
+    }
+}
+
 task runVGGIRAFFE {
     input {
         File in_left_read_pair_chunk_file
@@ -262,6 +320,7 @@ task runVGGIRAFFE {
         File in_ggbwt_file
         File in_dist_file
         File in_min_file
+        File in_ref_dict
         String in_vg_container
         String in_sample_name
         Int in_map_cores
@@ -286,6 +345,7 @@ task runVGGIRAFFE {
           --read-group "ID:1 LB:lib1 SM:~{in_sample_name} PL:illumina PU:unit1" \
           --sample "~{in_sample_name}" \
           --output-format BAM \
+          --ref-paths ~{in_ref_dict} \
           -f ~{in_left_read_pair_chunk_file} -f ~{in_right_read_pair_chunk_file} \
           -x ~{in_xg_file} \
           -H ~{in_gbwt_file} \
@@ -303,57 +363,6 @@ task runVGGIRAFFE {
         cpu: in_map_cores
         disks: "local-disk " + in_map_disk + " SSD"
         docker: in_vg_container
-    }
-}
-
-# This changes the header dictionary order of the BAM file, and rewrites all
-# the reads in case some became unmapped because a contig vanished. It doesn't
-# change the order of the BAM because the input isn't sorted yet.
-task reorderBAMFile {
-    input {
-        String in_sample_name
-        File in_bam_chunk_file
-        File in_reference_file
-        File in_reference_index_file
-        File in_reference_dict_file
-        Int in_map_cores
-        Int in_map_disk
-        String in_map_mem
-    }
-
-    command <<<
-        # Set the exit code of a pipeline to that of the rightmost command 
-        # to exit with a non-zero status, or zero if all commands of the pipeline exit 
-        set -o pipefail
-        # cause a bash script to exit immediately when a command fails 
-        set -e
-        # cause the bash shell to treat unset variables as an error and exit immediately 
-        set -u
-        # echo each line of the script to stdout so we can see what is happening 
-        set -o xtrace
-        #to turn off echo do 'set +o xtrace' 
-
-        # Reference and its index must be adjacent and not at arbitrary paths
-        # the runner gives.
-        ln -f -s ~{in_reference_file} reference.fa
-        ln -f -s ~{in_reference_index_file} reference.fa.fai
-        # And the dict must be adjacent to both
-        ln -f -s ~{in_reference_dict_file} reference.dict
-
-        java -jar /usr/picard/picard.jar ReorderSam \
-          INPUT=~{in_bam_chunk_file} \
-          OUTPUT=~{in_sample_name}.reordered.bam \
-          REFERENCE=reference.fa
-    >>>
-    output {
-        File reordered_bam_file = "~{in_sample_name}.reordered.bam"
-    }
-    runtime {
-        time: 90
-        memory: in_map_mem + " GB"
-        cpu: in_map_cores
-        disks: "local-disk " + in_map_disk + " SSD"
-        docker: "quay.io/cmarkello/samtools_picard@sha256:e484603c61e1753c349410f0901a7ba43a2e5eb1c6ce9a240b7f737bba661eb4"
     }
 }
 
