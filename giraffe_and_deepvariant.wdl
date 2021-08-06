@@ -115,7 +115,11 @@ workflow vgMultiMap {
             in_map_mem=MAP_MEM
     }
     scatter (deepvariant_caller_input_files in zip(splitBAMbyPath.bam_contig_files, splitBAMbyPath.bam_contig_files_index)) {
-        call runGATKRealignerTargetCreator {
+        # Because we can't pass the dict at alignment time, we need to
+        # "reorder" the single-contig BAMs into having the right dict, or GATK
+        # will bail and complain they are out of order based solely on the
+        # reference info in the BAM header.
+        call reorderContigBAM {
             input:
                 in_sample_name=SAMPLE_NAME,
                 in_bam_file=deepvariant_caller_input_files.left,
@@ -124,11 +128,20 @@ workflow vgMultiMap {
                 in_reference_index_file=REF_INDEX_FILE,
                 in_reference_dict_file=REF_DICT_FILE
         }
+        call runGATKRealignerTargetCreator {
+            input:
+                in_sample_name=SAMPLE_NAME,
+                in_bam_file=reorderContigBAM.reordered_bam,
+                in_bam_index_file=reorderContigBAM.reordered_bam_index,
+                in_reference_file=REF_FILE,
+                in_reference_index_file=REF_INDEX_FILE,
+                in_reference_dict_file=REF_DICT_FILE
+        }
         call runAbraRealigner {
             input:
                 in_sample_name=SAMPLE_NAME,
-                in_bam_file=deepvariant_caller_input_files.left,
-                in_bam_index_file=deepvariant_caller_input_files.right,
+                in_bam_file=reorderContigBAM.reordered_bam,
+                in_bam_index_file=reorderContigBAM.reordered_bam_index,
                 in_target_bed_file=runGATKRealignerTargetCreator.realigner_target_bed,
                 in_reference_file=REF_FILE,
                 in_reference_index_file=REF_INDEX_FILE
@@ -407,7 +420,7 @@ task splitBAMbyPath {
     }
 }
 
-task runGATKRealignerTargetCreator {
+task reorderContigBAM {
     input {
         String in_sample_name
         File in_bam_file
@@ -432,6 +445,57 @@ task runGATKRealignerTargetCreator {
         ln -f -s ~{in_bam_file} input_bam_file.bam
         ln -f -s ~{in_bam_index_file} input_bam_file.bam.bai
         CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g))
+
+        # Reference and its index must be adjacent and not at arbitrary paths
+        # the runner gives.
+        ln -f -s ~{in_reference_file} reference.fa
+        ln -f -s ~{in_reference_index_file} reference.fa.fai
+        # And the dict must be adjacent to both
+        ln -f -s ~{in_reference_dict_file} reference.dict
+
+        java -jar /usr/picard/picard.jar ReorderSam \
+          --CREATE_INDEX \
+          INPUT=input_bam_file.bam \
+          OUTPUT=~{in_sample_name}.${CONTIG_ID}.reordered.bam \
+          REFERENCE=reference.fa
+    >>>
+    output {
+        File reordered_bam = glob("~{in_sample_name}.*.reordered.bam")[0]
+        File reordered_bam_index = glob("~{in_sample_name}.*.reordered.bai")[0]
+    }
+    runtime {
+        memory: 20 + " GB"
+        cpu: 1
+        disks: "local-disk " + 40 + " SSD"
+        docker: "quay.io/cmarkello/samtools_picard@sha256:e484603c61e1753c349410f0901a7ba43a2e5eb1c6ce9a240b7f737bba661eb4"
+    }
+}
+
+task runGATKRealignerTargetCreator {
+    input {
+        String in_sample_name
+        File in_bam_file
+        File in_bam_index_file
+        File in_reference_file
+        File in_reference_index_file
+        File in_reference_dict_file
+    }
+
+    command <<<
+        # Set the exit code of a pipeline to that of the rightmost command 
+        # to exit with a non-zero status, or zero if all commands of the pipeline exit 
+        set -o pipefail
+        # cause a bash script to exit immediately when a command fails 
+        set -e
+        # cause the bash shell to treat unset variables as an error and exit immediately 
+        set -u
+        # echo each line of the script to stdout so we can see what is happening 
+        set -o xtrace
+        #to turn off echo do 'set +o xtrace' 
+
+        ln -f -s ~{in_bam_file} input_bam_file.bam
+        ln -f -s ~{in_bam_index_file} input_bam_file.bam.bai
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.reordered.bam$//g))
 
         # Reference and its index must be adjacent and not at arbitrary paths
         # the runner gives.
@@ -486,7 +550,7 @@ task runAbraRealigner {
 
         ln -f -s ~{in_bam_file} input_bam_file.bam
         ln -f -s ~{in_bam_index_file} input_bam_file.bam.bai
-        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g))
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.reordered.bam$//g))
 
         # Reference and its index must be adjacent and not at arbitrary paths
         # the runner gives.
