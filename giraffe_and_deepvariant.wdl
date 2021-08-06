@@ -341,7 +341,7 @@ task reorderBAMFile {
         ln -f -s ~{in_reference_dict_file} reference.dict
 
         java -jar /usr/picard/picard.jar ReorderSam \
-          INPUT=~{in_bam_chunk_file}.bam \
+          INPUT=~{in_bam_chunk_file} \
           OUTPUT=~{in_sample_name}.reordered.bam \
           REFERENCE=reference.fa
     >>>
