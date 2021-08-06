@@ -437,6 +437,8 @@ task runGATKRealignerTargetCreator {
         # the runner gives.
         ln -f -s ~{in_reference_file} reference.fa
         ln -f -s ~{in_reference_index_file} reference.fa.fai
+        # And the dict must be adjacent to both
+        ln -f -s ~{in_reference_dict_file} reference.dict
 
         java -jar /usr/GenomeAnalysisTK.jar -T RealignerTargetCreator \
           --remove_program_records \
