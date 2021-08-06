@@ -90,7 +90,7 @@ workflow vgMultiMap {
         call reorderBAMFile {
             input:
                 in_sample_name=SAMPLE_NAME,
-                in_chunk_bam_file=runVGGIRAFFE.chunk_bam_file,
+                in_bam_chunk_file=runVGGIRAFFE.chunk_bam_file,
                 in_reference_file=REF_FILE,
                 in_reference_index_file=REF_INDEX_FILE,
                 in_reference_dict_file=REF_DICT_FILE,
