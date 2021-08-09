@@ -627,14 +627,14 @@ task runDeepVariant {
         --regions ${CONTIG_ID} \
         --ref=reference.fa \
         --reads=input_bam_file.child.bam \
-        --output_vcf="~{in_sample_name}_deeptrio.vcf.gz" \
-        --output_gvcf="~{in_sample_name}_deeptrio.g.vcf.gz" \
+        --output_vcf="~{in_sample_name}_deepvariant.vcf.gz" \
+        --output_gvcf="~{in_sample_name}_deepvariant.g.vcf.gz" \
         --intermediate_results_dir=tmp_deepvariant \
         --num_shards=16
     >>>
     output {
-        File output_vcf_file = "~{in_sample_name}_deeptrio.vcf.gz"
-        File output_gvcf_file = "~{in_sample_name}_deeptrio.g.vcf.gz"
+        File output_vcf_file = "~{in_sample_name}_deepvariant.vcf.gz"
+        File output_gvcf_file = "~{in_sample_name}_deepvariant.g.vcf.gz"
     }
     runtime {
         memory: in_call_mem + " GB"
@@ -644,7 +644,7 @@ task runDeepVariant {
         preemptible: 1
         nvidiaDriverVersion: "418.87.00"
         disks: "local-disk " + in_call_disk + " SSD"
-        docker: "google/deepvariant:deeptrio-1.1.0-gpu"
+        docker: "google/deepvariant:1.1.0-gpu"
     }
 }
 
