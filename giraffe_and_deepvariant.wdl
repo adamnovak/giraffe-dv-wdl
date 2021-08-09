@@ -280,7 +280,7 @@ task subsetPathNames {
     runtime {
         memory: "1 GB"
         disks: "local-disk 10 SSD"
-        docker: ubuntu:20.04
+        docker: "ubuntu:20.04"
     }
 }
 
