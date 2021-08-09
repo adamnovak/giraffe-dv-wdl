@@ -48,8 +48,8 @@ workflow vgMultiMap {
             in_split_read_disk=SPLIT_READ_DISK
     }
 
-    # Extract path names and path lengths from xg file if PATH_LIST_FILE input not provided
     if (!defined(PATH_LIST_FILE)) {
+        # Extract path names to call against from xg file if PATH_LIST_FILE input not provided
         call extractPathNames {
             input:
                 in_xg_file=XG_FILE,
@@ -57,8 +57,16 @@ workflow vgMultiMap {
                 in_extract_disk=MAP_DISK,
                 in_extract_mem=MAP_MEM
         }
+        # Filter down to major paths, because GRCh38 includes thousands of
+        # decoys and unplaced/unlocalized contigs, and we can't efficiently
+        # scatter across them, nor do we care about accuracy on them, and also
+        # calling on the decoys is semantically meaningless.
+        call subsetPathNames {
+            input:
+                in_path_list=extractPathNames.output_path_list
+        }
     }
-    File pipeline_path_list_file = select_first([PATH_LIST_FILE, extractPathNames.output_path_list])
+    File pipeline_path_list_file = select_first([PATH_LIST_FILE, subsetPathNames.output_path_list])
     
     # To make sure that we have a FASTA reference with a contig set that
     # exactly matches the graph, we generate it ourselves, from the graph.
@@ -253,6 +261,26 @@ task extractPathNames {
         memory: in_extract_mem + " GB"
         disks: "local-disk " + in_extract_disk + " SSD"
         docker: in_vg_container
+    }
+}
+
+task subsetPathNames {
+    input {
+        File in_path_list
+    }
+
+    command <<<
+        set -eux -o pipefail
+
+        grep -v _decoy ~{in_path_list} | grep -v _random |  grep -v chrUn_ | grep -v chrEBV | grep -v chrM > path_list.txt
+    >>>
+    output {
+        File output_path_list = "path_list.txt"
+    }
+    runtime {
+        memory: "1 GB"
+        disks: "local-disk 10 SSD"
+        docker: ubuntu:20.04
     }
 }
 
