@@ -149,7 +149,8 @@ workflow vgMultiMap {
                 in_bam_index_file=deepvariant_caller_input_files.right,
                 in_reference_file=reference_file,
                 in_reference_index_file=reference_index_file,
-                in_reference_dict_file=reference_dict_file
+                in_reference_dict_file=reference_dict_file,
+                in_call_disk=CALL_DISK
         }
         call runAbraRealigner {
             input:
@@ -158,7 +159,8 @@ workflow vgMultiMap {
                 in_bam_index_file=deepvariant_caller_input_files.right,
                 in_target_bed_file=runGATKRealignerTargetCreator.realigner_target_bed,
                 in_reference_file=reference_file,
-                in_reference_index_file=reference_index_file
+                in_reference_index_file=reference_index_file,
+                in_call_disk=CALL_DISK
         }
         call runDeepVariant {
             input:
@@ -519,6 +521,7 @@ task runGATKRealignerTargetCreator {
         File in_reference_file
         File in_reference_index_file
         File in_reference_dict_file
+        Int in_call_disk
     }
 
     command <<<
@@ -563,6 +566,7 @@ task runGATKRealignerTargetCreator {
         time: 180
         memory: 20 + " GB"
         cpu: 16
+        disks: "local-disk " + in_call_disk + " SSD"
         docker: "broadinstitute/gatk3@sha256:5ecb139965b86daa9aa85bc531937415d9e98fa8a6b331cb2b05168ac29bc76b"
     }
 }
@@ -574,6 +578,7 @@ task runAbraRealigner {
         File in_target_bed_file
         File in_reference_file
         File in_reference_index_file
+        Int in_call_disk
     }
 
     command <<<
@@ -613,6 +618,7 @@ task runAbraRealigner {
         time: 180
         memory: 20 + " GB"
         cpu: 16
+        disks: "local-disk " + in_call_disk + " SSD"
         docker: "dceoy/abra2:latest"
     }
 }
