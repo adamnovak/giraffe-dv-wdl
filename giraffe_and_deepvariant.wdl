@@ -12,7 +12,12 @@ workflow vgMultiMap {
         String SAMPLE_NAME                              # The sample name
         String VG_CONTAINER = "quay.io/jmonlong/vg:beea35e"   # VG Container used in the pipeline (e.g. quay.io/vgteam/vg:v1.16.0)
         Int READS_PER_CHUNK = 20000000                  # Number of reads contained in each mapping chunk (20000000 for wgs)
-        File? PATH_LIST_FILE                            # (OPTIONAL) Text file where each line is a path name in the XG index
+        Array[String]+ CONTIGS = [                      # Desired reference genome contigs
+            "chr1", "chr2", "chr3", "chr4", "chr5", "chr6",
+            "chr7", "chr8", "chr9", "chr10", "chr11", "chr12",
+            "chr13", "chr14", "chr15", "chr16", "chr17", "chr18",
+            "chr19", "chr20", "chr21", "chr22",  "chrX",  "chrY", "chrM"
+        ]
         File XG_FILE                                    # Path to .xg index file
         File GBWT_FILE                                  # Path to .gbwt index file
         File GGBWT_FILE                                 # Path to .gg index file
@@ -51,15 +56,6 @@ workflow vgMultiMap {
             in_split_read_disk=SPLIT_READ_DISK
     }
 
-    # Extract path names and path lengths from xg file if PATH_LIST_FILE input not provided
-    if (!defined(PATH_LIST_FILE)) {
-        call extractPathNames {
-            input:
-                in_xg_file=XG_FILE,
-                in_vg_container=VG_CONTAINER
-        }
-    }
-    File pipeline_path_list_file = select_first([PATH_LIST_FILE, extractPathNames.output_path_list])
 
     ################################################################
     # Distribute vg mapping opperation over each chunked read pair #
@@ -108,7 +104,7 @@ workflow vgMultiMap {
             in_sample_name=SAMPLE_NAME,
             in_merged_bam_file=mergeAlignmentBAMChunks.merged_bam_file,
             in_merged_bam_file_index=mergeAlignmentBAMChunks.merged_bam_file_index,
-            in_path_list_file=pipeline_path_list_file,
+            in_path_list=CONTIGS,
             in_map_cores=MAP_CORES,
             in_map_disk=MAP_DISK,
             in_map_mem=MAP_MEM
@@ -371,7 +367,7 @@ task splitBAMbyPath {
         String in_sample_name
         File in_merged_bam_file
         File in_merged_bam_file_index
-        File in_path_list_file
+        Array[String]+ in_path_list
         Int in_map_cores
         Int in_map_disk
         String in_map_mem
@@ -383,16 +379,15 @@ task splitBAMbyPath {
         ln -s ~{in_merged_bam_file} input_bam_file.bam
         ln -s ~{in_merged_bam_file_index} input_bam_file.bam.bai
 
-        while IFS=$'\t' read -ra path_list_line; do
-            path_name="${path_list_line[0]}"
+        while read -r contig; do
             samtools view \
               -@ ~{in_map_cores} \
               -h -O BAM \
-              input_bam_file.bam ${path_name} \
-              -o ~{in_sample_name}.${path_name}.bam \
+              input_bam_file.bam ${contig} \
+              -o ~{in_sample_name}.${contig}.bam \
             && samtools index \
-              ~{in_sample_name}.${path_name}.bam
-        done < ~{in_path_list_file}
+              ~{in_sample_name}.${contig}.bam
+        done < "~{write_lines(in_path_list)}"
     >>>
     output {
         Array[File] bam_contig_files = glob("~{in_sample_name}.*.bam")
