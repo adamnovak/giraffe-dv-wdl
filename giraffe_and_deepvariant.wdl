@@ -12,7 +12,8 @@ workflow vgMultiMap {
         String SAMPLE_NAME                              # The sample name
         String VG_CONTAINER = "quay.io/jmonlong/vg:beea35e"   # VG Container used in the pipeline (e.g. quay.io/vgteam/vg:v1.16.0)
         Int READS_PER_CHUNK = 20000000                  # Number of reads contained in each mapping chunk (20000000 for wgs)
-        File? PATH_LIST_FILE                            # (OPTIONAL) Text file where each line is a path name in the XG index
+        Array[String]+? CONTIGS                         # (OPTIONAL) Desired reference genome contigs, which are all paths in the XG index.
+        File? PATH_LIST_FILE                            # (OPTIONAL) Text file where each line is a path name in the XG index, to use instead of CONTIGS. If neither is given, paths are extracted from the XG and subset to chromosome-looking paths.
         File XG_FILE                                    # Path to .xg index file
         File GBWT_FILE                                  # Path to .gbwt index file
         File GGBWT_FILE                                 # Path to .gg index file
@@ -48,25 +49,32 @@ workflow vgMultiMap {
             in_split_read_disk=SPLIT_READ_DISK
     }
 
-    if (!defined(PATH_LIST_FILE)) {
-        # Extract path names to call against from xg file if PATH_LIST_FILE input not provided
-        call extractPathNames {
-            input:
-                in_xg_file=XG_FILE,
-                in_vg_container=VG_CONTAINER,
-                in_extract_disk=MAP_DISK,
-                in_extract_mem=MAP_MEM
+    if (!defined(CONTIGS)) {
+        if (!defined(PATH_LIST_FILE)) {
+            # Extract path names to call against from xg file if PATH_LIST_FILE input not provided
+            call extractPathNames {
+                input:
+                    in_xg_file=XG_FILE,
+                    in_vg_container=VG_CONTAINER,
+                    in_extract_disk=MAP_DISK,
+                    in_extract_mem=MAP_MEM
+            }
+            # Filter down to major paths, because GRCh38 includes thousands of
+            # decoys and unplaced/unlocalized contigs, and we can't efficiently
+            # scatter across them, nor do we care about accuracy on them, and also
+            # calling on the decoys is semantically meaningless.
+            call subsetPathNames {
+                input:
+                    in_path_list_file=extractPathNames.output_path_list_file
+            }
         }
-        # Filter down to major paths, because GRCh38 includes thousands of
-        # decoys and unplaced/unlocalized contigs, and we can't efficiently
-        # scatter across them, nor do we care about accuracy on them, and also
-        # calling on the decoys is semantically meaningless.
-        call subsetPathNames {
+    } else {
+        call writePathNames {
             input:
-                in_path_list=extractPathNames.output_path_list
+                in_path_list=CONTIGS
         }
     }
-    File pipeline_path_list_file = select_first([PATH_LIST_FILE, subsetPathNames.output_path_list])
+    File pipeline_path_list_file = select_first([PATH_LIST_FILE, subsetPathNames.output_path_list_file, writePathNames.output_path_list_file])
     
     # To make sure that we have a FASTA reference with a contig set that
     # exactly matches the graph, we generate it ourselves, from the graph.
@@ -257,7 +265,7 @@ task extractPathNames {
             --xg ${in_xg_file} > path_list.txt
     }
     output {
-        File output_path_list = "path_list.txt"
+        File output_path_list_file = "path_list.txt"
     }
     runtime {
         memory: in_extract_mem + " GB"
@@ -268,21 +276,35 @@ task extractPathNames {
 
 task subsetPathNames {
     input {
-        File in_path_list
+        File in_path_list_file
     }
 
     command <<<
         set -eux -o pipefail
 
-        grep -v _decoy ~{in_path_list} | grep -v _random |  grep -v chrUn_ | grep -v chrEBV | grep -v chrM > path_list.txt
+        grep -v _decoy ~{in_path_list_file} | grep -v _random |  grep -v chrUn_ | grep -v chrEBV | grep -v chrM > path_list.txt
     >>>
     output {
-        File output_path_list = "path_list.txt"
+        File output_path_list_file = "path_list.txt"
     }
     runtime {
         memory: "1 GB"
         disks: "local-disk 10 SSD"
         docker: "ubuntu:20.04"
+    }
+}
+
+task writePathNames {
+    input {
+        Array[String]+ in_path_list
+    }
+
+    output {
+        File output_path_list_file = write_lines(in_path_list)
+    }
+    runtime {
+        memory: 1 + " GB"
+        disks: "local-disk " + 1 + " SSD"
     }
 }
 
@@ -490,16 +512,15 @@ task splitBAMbyPath {
         ln -s ~{in_merged_bam_file} input_bam_file.bam
         ln -s ~{in_merged_bam_file_index} input_bam_file.bam.bai
 
-        while IFS=$'\t' read -ra path_list_line; do
-            path_name="${path_list_line[0]}"
+        while read -r contig; do
             samtools view \
               -@ ~{in_map_cores} \
               -h -O BAM \
-              input_bam_file.bam ${path_name} \
-              -o ~{in_sample_name}.${path_name}.bam \
+              input_bam_file.bam ${contig} \
+              -o ~{in_sample_name}.${contig}.bam \
             && samtools index \
-              ~{in_sample_name}.${path_name}.bam
-        done < ~{in_path_list_file}
+              ~{in_sample_name}.${contig}.bam
+        done < "~{in_path_list_file}"
     >>>
     output {
         Array[File] bam_contig_files = glob("~{in_sample_name}.*.bam")
