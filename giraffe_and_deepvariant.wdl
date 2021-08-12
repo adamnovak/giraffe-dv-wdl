@@ -70,12 +70,10 @@ workflow vgMultiMap {
         }
     } 
     if (defined(CONTIGS)) {
-        call writePathNames {
-            input:
-                in_path_list=CONTIGS
-        }
+        # Put the paths in a file to use later
+        File written_path_names_file = write_lines(CONTIGS)
     }
-    File pipeline_path_list_file = select_first([PATH_LIST_FILE, subsetPathNames.output_path_list_file, writePathNames.output_path_list_file])
+    File pipeline_path_list_file = select_first([PATH_LIST_FILE, subsetPathNames.output_path_list_file, written_path_names_file])
     
     # To make sure that we have a FASTA reference with a contig set that
     # exactly matches the graph, we generate it ourselves, from the graph.
@@ -292,20 +290,6 @@ task subsetPathNames {
         memory: "1 GB"
         disks: "local-disk 10 SSD"
         docker: "ubuntu:20.04"
-    }
-}
-
-task writePathNames {
-    input {
-        Array[String]+ in_path_list
-    }
-
-    output {
-        File output_path_list_file = write_lines(in_path_list)
-    }
-    runtime {
-        memory: 1 + " GB"
-        disks: "local-disk " + 1 + " SSD"
     }
 }
 
