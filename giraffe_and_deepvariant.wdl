@@ -68,7 +68,8 @@ workflow vgMultiMap {
                     in_path_list_file=extractPathNames.output_path_list_file
             }
         }
-    } else {
+    } 
+    if (defined(CONTIGS)) {
         call writePathNames {
             input:
                 in_path_list=CONTIGS
