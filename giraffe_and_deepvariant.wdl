@@ -793,6 +793,8 @@ task buildReferenceTemplate {
         File in_reference_file
     }
     command <<<
+        set -eux -o pipefail
+    
         rtg format -o template.sdf "~{in_reference_file}"
         tar -czf template.sdf.tar.gz template.sdf/
     >>>
@@ -819,6 +821,8 @@ task compareCalls {
         Int in_call_mem
     }
     command <<<
+        set -eux -o pipefail
+    
         # Put sample and truth near their indexes
         ln -s "~{in_sample_vcf_file}" sample.vcf.gz
         ln -s "~{in_sample_vcf_index_file}" sample.vcf.gz.tbi
