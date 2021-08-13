@@ -7,6 +7,9 @@
   "vgMultiMap.SAMPLE_NAME": "HG003",
   "vgMultiMap.INPUT_READ_FILE_1": "gs://cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/HG003.novaseq.pcr-free.35x.R1.fastq.gz",
   "vgMultiMap.INPUT_READ_FILE_2": "gs://cmarkell-vg-wdl-dev/debug_pgrc_graph/july7_version_analysis/HG003.novaseq.pcr-free.35x.R2.fastq.gz",
+  "vgMultiMap.TRUTH_VCF": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/HG003_GRCh38_1_22_v4.2.1_benchmark.vcf.gz",
+  "vgMultiMap.TRUTH_VCF_INDEX": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/HG003_GRCh38_1_22_v4.2.1_benchmark.vcf.gz.tbi",
+  "vgMultiMap.EVALUATION_REGIONS_BED": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/HG003_GRCh38_1_22_v4.2.1_benchmark_noinconsistent.bed",
   "vgMultiMap.SPLIT_READ_DISK": "60",
   "vgMultiMap.MAP_DISK": "200",
   "vgMultiMap.MAP_MEM": "120"
