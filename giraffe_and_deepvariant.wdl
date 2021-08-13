@@ -842,8 +842,8 @@ task compareCalls {
     runtime {
         docker: "realtimegenomics/rtg-tools"
         cpu: 32
-        Int in_call_disk
-        Int in_call_mem
+        disks: "local-disk " + in_call_disk + " SSD"
+        memory: in_call_mem + " GB"
     }
 }
 
