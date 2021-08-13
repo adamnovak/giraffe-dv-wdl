@@ -19,6 +19,9 @@ workflow vgMultiMap {
         File GGBWT_FILE                                 # Path to .gg index file
         File DIST_FILE                                  # Path to .dist index file
         File MIN_FILE                                   # Path to .min index file
+        File? TRUTH_VCF                                 # Path to .vcf.gz to compare against
+        File? TRUTH_VCF_INDEX                           # Path to Tabix index for TRUTH_VCF
+        File? EVALUATION_REGIONS_BED                    # BED to restrict comparison against TRUTH_VCF to
         Int SPLIT_READ_CORES = 8
         Int SPLIT_READ_DISK = 10
         Int MAP_CORES = 16
@@ -201,7 +204,29 @@ workflow vgMultiMap {
             in_call_mem=CALL_MEM
     }
     
+    if (defined(TRUTH_VCF) && defined(TRUTH_VCF_INDEX)) {
+    
+        # To evaluate the VCF we need a template of the reference
+        call buildReferenceTemplate {
+            input:
+                in_reference_file=reference_file
+        }
+        
+        call compareCalls {
+            input:
+                in_sample_vcf_file=bgzipMergedVCF.output_merged_vcf,
+                in_sample_vcf_index_file=bgzipMergedVCF.output_merged_vcf_index,
+                in_truth_vcf_file=select_first([TRUTH_VCF]),
+                in_truth_vcf_index_file=select_first([TRUTH_VCF_INDEX]),
+                in_template_file=buildReferenceTemplate.output_template_file,
+                in_evaluation_regions_file=EVALUATION_REGIONS_BED,
+                in_call_disk=CALL_DISK,
+                in_call_mem=CALL_MEM
+        }
+    }
+    
     output {
+        File? output_evaluation_archive = compareCalls.output_evaluation_archive
         File output_vcf = bgzipMergedVCF.output_merged_vcf
         File output_vcf_index = bgzipMergedVCF.output_merged_vcf_index
         Array[File] output_indelrealigned_bams = runAbraRealigner.indel_realigned_bam
@@ -762,5 +787,65 @@ task bgzipMergedVCF {
         docker: in_vg_container
     }
 }
+
+task buildReferenceTemplate {
+    input {
+        File in_reference_file
+    }
+    command <<<
+        rtg format -o template.sdf "~{in_reference_file}"
+    >>>
+    output {
+        File output_template_file = "template.sdf"
+    }
+    runtime {
+        docker: "realtimegenomics/rtg-tools"
+        memory: 4 + " GB"
+        cpu: 1
+        disks: "local-disk " + 10 + " SSD" 
+    }
+}
+
+task compareCalls {
+    input {
+        File in_sample_vcf_file
+        File in_sample_vcf_index_file
+        File in_truth_vcf_file
+        File in_truth_vcf_index_file
+        File in_template_file
+        File? in_evaluation_regions_file
+        Int in_call_disk
+        Int in_call_mem
+    }
+    command <<<
+        # Put sample and truth near their indexes
+        
+        ln -s "~{in_sample_vcf_file}" sample.vcf.gz
+        ln -s "~{in_sample_vcf_index_file}" sample.vcf.gz.tbi
+        
+        ln -s "~{in_truth_vcf_file}" truth.vcf.gz
+        ln -s "~{in_truth_vcf_index_file}" truth.vcf.gz.tbi
+    
+        rtg vcfeval \
+            --baseline truth.vcf.gz \
+            --calls sample.vcf.gz \
+            ~{"--evaluation-regions=" + in_evaluation_regions_file} \
+            --template "~{in_template_file}" \
+            --threads 32 \
+            --output vcfeval_results
+            
+        tar -czf vcfeval_results.tar.gz vcfeval_results/
+    >>>
+    output {
+        File output_evaluation_archive = "vcfeval_results.tar.gz"
+    }
+    runtime {
+        docker: "realtimegenomics/rtg-tools"
+        cpu: 32
+        Int in_call_disk
+        Int in_call_mem
+    }
+}
+
 
 
