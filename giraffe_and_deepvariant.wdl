@@ -218,7 +218,7 @@ workflow vgMultiMap {
                 in_sample_vcf_index_file=bgzipMergedVCF.output_merged_vcf_index,
                 in_truth_vcf_file=select_first([TRUTH_VCF]),
                 in_truth_vcf_index_file=select_first([TRUTH_VCF_INDEX]),
-                in_template_file=buildReferenceTemplate.output_template_file,
+                in_template_archive=buildReferenceTemplate.output_template_archive,
                 in_evaluation_regions_file=EVALUATION_REGIONS_BED,
                 in_call_disk=CALL_DISK,
                 in_call_mem=CALL_MEM
@@ -794,9 +794,10 @@ task buildReferenceTemplate {
     }
     command <<<
         rtg format -o template.sdf "~{in_reference_file}"
+        tar -czf template.sdf.tar.gz template.sdf/
     >>>
     output {
-        File output_template_file = "template.sdf"
+        File output_template_archive = "template.sdf.tar.gz"
     }
     runtime {
         docker: "realtimegenomics/rtg-tools"
@@ -812,25 +813,26 @@ task compareCalls {
         File in_sample_vcf_index_file
         File in_truth_vcf_file
         File in_truth_vcf_index_file
-        File in_template_file
+        File in_template_archive
         File? in_evaluation_regions_file
         Int in_call_disk
         Int in_call_mem
     }
     command <<<
         # Put sample and truth near their indexes
-        
         ln -s "~{in_sample_vcf_file}" sample.vcf.gz
         ln -s "~{in_sample_vcf_index_file}" sample.vcf.gz.tbi
-        
         ln -s "~{in_truth_vcf_file}" truth.vcf.gz
         ln -s "~{in_truth_vcf_index_file}" truth.vcf.gz.tbi
+        
+        # Set up template; we assume it drops a "template.sdf"
+        tar -xf "~{in_template_archive}"
     
         rtg vcfeval \
             --baseline truth.vcf.gz \
             --calls sample.vcf.gz \
             ~{"--evaluation-regions=" + in_evaluation_regions_file} \
-            --template "~{in_template_file}" \
+            --template template.sdf \
             --threads 32 \
             --output vcfeval_results
             
