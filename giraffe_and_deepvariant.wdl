@@ -683,7 +683,6 @@ task runDeepVariant {
         cpu: 8
         gpuType: "nvidia-tesla-t4"
         gpuCount: 1
-        preemptible: 1
         nvidiaDriverVersion: "418.87.00"
         disks: "local-disk " + in_call_disk + " SSD"
         docker: "google/deepvariant:1.1.0-gpu"
