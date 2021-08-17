@@ -233,6 +233,7 @@ workflow vgMultiMap {
                 in_truth_vcf_file=select_first([TRUTH_VCF]),
                 in_truth_vcf_index_file=select_first([TRUTH_VCF_INDEX]),
                 in_reference_file=reference_file,
+                in_reference_index_file=reference_index_file,
                 in_evaluation_regions_file=EVALUATION_REGIONS_BED,
                 in_call_disk=CALL_DISK,
                 in_call_mem=CALL_MEM
@@ -590,10 +591,10 @@ task runGATKRealignerTargetCreator {
 
         # Reference and its index must be adjacent and not at arbitrary paths
         # the runner gives.
-        ln -f -s ~{in_reference_file} reference.fa
-        ln -f -s ~{in_reference_index_file} reference.fa.fai
+        ln -f -s "~{in_reference_file}" reference.fa
+        ln -f -s "~{in_reference_index_file}" reference.fa.fai
         # And the dict must be adjacent to both
-        ln -f -s ~{in_reference_dict_file} reference.dict
+        ln -f -s "~{in_reference_dict_file}" reference.dict
 
         java -jar /usr/GenomeAnalysisTK.jar -T RealignerTargetCreator \
           --remove_program_records \
@@ -875,6 +876,7 @@ task compareCallsHappy {
         File in_truth_vcf_file
         File in_truth_vcf_index_file
         File in_reference_file
+        File in_reference_index_file
         File? in_evaluation_regions_file
         Int in_call_disk
         Int in_call_mem
@@ -888,13 +890,18 @@ task compareCallsHappy {
         ln -s "~{in_truth_vcf_file}" truth.vcf.gz
         ln -s "~{in_truth_vcf_index_file}" truth.vcf.gz.tbi
         
+        # Reference and its index must be adjacent and not at arbitrary paths
+        # the runner gives.
+        ln -f -s "~{in_reference_file}" reference.fa
+        ln -f -s "~{in_reference_index_file}" reference.fa.fai
+        
         mkdir happy_results
    
         /opt/hap.py/bin/hap.py \
             truth.vcf.gz \
             sample.vcf.gz \
             ~{"-f " + in_evaluation_regions_file} \
-            --reference "~{in_reference_file}" \
+            --reference reference.fa \
             --threads 32 \
             --engine=vcfeval \
             -o happy_results/eval
