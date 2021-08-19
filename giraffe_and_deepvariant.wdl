@@ -705,7 +705,7 @@ task runDeepVariant {
         ln -f -s ~{in_reference_index_file} reference.fa.fai
 
         /opt/deepvariant/bin/run_deepvariant \
-        --make_examples_extra_args 'min_mapping_quality=0' \
+        --make_examples_extra_args 'min_mapping_quality=1' \
         --model_type=WGS \
         --regions ${CONTIG_ID} \
         --ref=reference.fa \
