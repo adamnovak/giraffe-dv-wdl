@@ -523,7 +523,7 @@ task runDeepVariant {
 
         
         /opt/deepvariant/bin/run_deepvariant \
-        --make_examples_extra_args 'min_mapping_quality=0' \
+        --make_examples_extra_args 'min_mapping_quality=1' \
         --model_type=WGS \
         --regions ${CONTIG_ID} \
         --ref=~{in_reference_file} \
