@@ -22,7 +22,7 @@ workflow vgMultiMap {
         File? TRUTH_VCF                                 # Path to .vcf.gz to compare against
         File? TRUTH_VCF_INDEX                           # Path to Tabix index for TRUTH_VCF
         File? EVALUATION_REGIONS_BED                    # BED to restrict comparison against TRUTH_VCF to
-        Int MIN_MAPQ = 4                                # Minimum MAPQ of reads to use for calling. 4 is the lowest at which a mapping is more likely to be right than wrong.
+        Int MIN_MAPQ = 1                                # Minimum MAPQ of reads to use for calling. 4 is the lowest at which a mapping is more likely to be right than wrong.
         Int REALIGNMENT_EXPANSION_BASES = 160           # Number of bases to expand indel realignment targets by on either side, to free up read tails in slippery regions.
         Int SPLIT_READ_CORES = 8
         Int SPLIT_READ_DISK = 10
