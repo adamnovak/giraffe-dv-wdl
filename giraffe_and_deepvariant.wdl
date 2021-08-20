@@ -22,6 +22,8 @@ workflow vgMultiMap {
         File? TRUTH_VCF                                 # Path to .vcf.gz to compare against
         File? TRUTH_VCF_INDEX                           # Path to Tabix index for TRUTH_VCF
         File? EVALUATION_REGIONS_BED                    # BED to restrict comparison against TRUTH_VCF to
+        Int MIN_MAPQ = 4                                # Minimum MAPQ of reads to use for calling. 4 is the lowest at which a mapping is more likely to be right than wrong.
+        Int REALIGNMENT_EXPANSION_BASES = 160           # Number of bases to expand indel realignment targets by on either side, to free up read tails in slippery regions.
         Int SPLIT_READ_CORES = 8
         Int SPLIT_READ_DISK = 10
         Int MAP_CORES = 16
@@ -164,12 +166,23 @@ workflow vgMultiMap {
                 in_reference_dict_file=reference_dict_file,
                 in_call_disk=CALL_DISK
         }
+        if (REALIGNMENT_EXPANSION_BASES != 0) {
+            # We want the realignment targets to be wider
+            call widenRealignmentTargets {
+                input:
+                    in_target_bed_file=runGATKRealignerTargetCreator.realigner_target_bed,
+                    in_reference_index_file=reference_index_file,
+                    in_expansion_bases=REALIGNMENT_EXPANSION_BASES,
+                    in_call_disk=CALL_DISK
+            }
+        }
+        File target_bed_file = select_first([widenRealignmentTargets.output_target_bed_file, runGATKRealignerTargetCreator.realigner_target_bed])
         call runAbraRealigner {
             input:
                 in_sample_name=SAMPLE_NAME,
                 in_bam_file=deepvariant_caller_input_files.left,
                 in_bam_index_file=deepvariant_caller_input_files.right,
-                in_target_bed_file=runGATKRealignerTargetCreator.realigner_target_bed,
+                in_target_bed_file=target_bed_file,
                 in_reference_file=reference_file,
                 in_reference_index_file=reference_index_file,
                 in_call_disk=CALL_DISK
@@ -181,6 +194,7 @@ workflow vgMultiMap {
                 in_bam_file_index=runAbraRealigner.indel_realigned_bam_index,
                 in_reference_file=reference_file,
                 in_reference_index_file=reference_index_file,
+                in_min_mapq=MIN_MAPQ,
                 in_call_cores=CALL_CORES,
                 in_call_disk=CALL_DISK,
                 in_call_mem=CALL_MEM
@@ -619,6 +633,41 @@ task runGATKRealignerTargetCreator {
         docker: "broadinstitute/gatk3@sha256:5ecb139965b86daa9aa85bc531937415d9e98fa8a6b331cb2b05168ac29bc76b"
     }
 }
+task widenRealignmentTargets {
+    input {
+        File in_target_bed_file
+        File in_reference_index_file
+        Int in_expansion_bases
+        Int in_call_disk
+    }
+
+    command <<<
+        # Set the exit code of a pipeline to that of the rightmost command
+        # to exit with a non-zero status, or zero if all commands of the pipeline exit
+        set -o pipefail
+        # cause a bash script to exit immediately when a command fails
+        set -e
+        # cause the bash shell to treat unset variables as an error and exit immediately
+        set -u
+        # echo each line of the script to stdout so we can see what is happening
+        set -o xtrace
+        #to turn off echo do 'set +o xtrace'
+        
+        BASE_NAME=($(ls ~{in_target_bed_file} | rev | cut -f1 -d'/' | rev | sed s/.bed$//g))
+
+        # Widen the BED regions, but don't escape the chromosomes
+        bedtools slop -i "~{in_target_bed_file}" -g "~{in_reference_index_file}" -b "~{in_expansion_bases}" > "${BASE_NAME}.widened.bed"
+    >>>
+    output {
+        File output_target_bed_file = glob("*.widened.bed")[0]
+    }
+    runtime {
+        memory: 4 + " GB"
+        cpu: 1
+        disks: "local-disk " + in_call_disk + " SSD"
+        docker: "biocontainers/bedtools:v2.27.1dfsg-4-deb_cv1"
+    }
+}
 task runAbraRealigner {
     input {
         String in_sample_name
@@ -679,6 +728,7 @@ task runDeepVariant {
         File in_bam_file_index
         File in_reference_file
         File in_reference_index_file
+        Int in_min_mapq
         Int in_call_cores
         Int in_call_disk
         Int in_call_mem
@@ -707,7 +757,7 @@ task runDeepVariant {
         # When making examples, throw out any reads that are more likely to be
         # mismapped than not (MAPQ 3 or less)
         /opt/deepvariant/bin/run_deepvariant \
-        --make_examples_extra_args 'min_mapping_quality=4' \
+        --make_examples_extra_args 'min_mapping_quality=~{in_min_mapq}' \
         --model_type=WGS \
         --regions ${CONTIG_ID} \
         --ref=reference.fa \
