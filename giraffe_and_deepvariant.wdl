@@ -704,8 +704,10 @@ task runDeepVariant {
         ln -f -s ~{in_reference_file} reference.fa
         ln -f -s ~{in_reference_index_file} reference.fa.fai
 
+        # When making examples, throw out any reads that are more likely to be
+        # mismapped than not (MAPQ 3 or less)
         /opt/deepvariant/bin/run_deepvariant \
-        --make_examples_extra_args 'min_mapping_quality=1' \
+        --make_examples_extra_args 'min_mapping_quality=4' \
         --model_type=WGS \
         --regions ${CONTIG_ID} \
         --ref=reference.fa \
