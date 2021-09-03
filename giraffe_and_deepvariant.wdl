@@ -436,6 +436,7 @@ task runVGGIRAFFE {
 
         READ_CHUNK_ID=($(ls ~{in_left_read_pair_chunk_file} | awk -F'.' '{print $(NF-2)}'))
         vg giraffe \
+          --progress \
           --read-group "ID:1 LB:lib1 SM:~{in_sample_name} PL:illumina PU:unit1" \
           --sample "~{in_sample_name}" \
           --output-format BAM \
