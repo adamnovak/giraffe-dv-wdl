@@ -15,5 +15,5 @@
   "vgMultiMap.SPLIT_READ_DISK": "60",
   "vgMultiMap.MAP_DISK": "200",
   "vgMultiMap.MAP_MEM": "120",
-  "vgMultiMap.VG_CONTAINER": "quay.io/vgteam/vg:ci-3130-9172f79746b0605bfb46f422718b943c2438f120"
+  "vgMultiMap.VG_CONTAINER": "quay.io/vgteam/vg:ci-3217-35123ca5f2c03285b479b394e9e76e59fdd1d6d5"
 }
