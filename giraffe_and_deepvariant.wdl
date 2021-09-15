@@ -718,7 +718,10 @@ task runAbraRealigner {
         memory: 20 + " GB"
         cpu: 16
         disks: "local-disk " + in_call_disk + " SSD"
-        docker: "dceoy/abra2:latest"
+        # This used to be docker: "dceoy/abra2:latest" but they moved the tag
+        # and it stopped working. A known good version has been rehosted on
+        # Quay in case Docker Hub deletes it.
+        docker: "quay.io/adamnovak/dceoy-abra2@sha256:43d09d1c10220cfeab09e2763c2c5257884fa4457bcaa224f4e3796a28a24bba"
     }
 }
 
@@ -871,7 +874,7 @@ task buildReferenceTemplate {
         File output_template_archive = "template.sdf.tar.gz"
     }
     runtime {
-        docker: "realtimegenomics/rtg-tools"
+        docker: "realtimegenomics/rtg-tools:3.12.1"
         memory: 4 + " GB"
         cpu: 1
         disks: "local-disk " + 10 + " SSD" 
@@ -915,7 +918,7 @@ task compareCalls {
         File output_evaluation_archive = "vcfeval_results.tar.gz"
     }
     runtime {
-        docker: "realtimegenomics/rtg-tools"
+        docker: "realtimegenomics/rtg-tools:3.12.1"
         cpu: 32
         disks: "local-disk " + in_call_disk + " SSD"
         memory: in_call_mem + " GB"
