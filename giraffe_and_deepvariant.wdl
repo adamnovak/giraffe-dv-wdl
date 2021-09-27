@@ -22,6 +22,9 @@ workflow vgMultiMap {
         File? TRUTH_VCF                                 # Path to .vcf.gz to compare against
         File? TRUTH_VCF_INDEX                           # Path to Tabix index for TRUTH_VCF
         File? EVALUATION_REGIONS_BED                    # BED to restrict comparison against TRUTH_VCF to
+        File? DV_MODEL_META                             # .meta file for a custom DeepVariant calling model
+        File? DV_MODEL_INDEX                            # .index file for a custom DeepVariant calling model
+        File? DV_MODEL_DATA                             # .data-00000-of-00001 file for a custom DeepVariant calling model
         Int MIN_MAPQ = 1                                # Minimum MAPQ of reads to use for calling. 4 is the lowest at which a mapping is more likely to be right than wrong.
         Int REALIGNMENT_EXPANSION_BASES = 160           # Number of bases to expand indel realignment targets by on either side, to free up read tails in slippery regions.
         Int SPLIT_READ_CORES = 8
@@ -194,6 +197,9 @@ workflow vgMultiMap {
                 in_bam_file_index=runAbraRealigner.indel_realigned_bam_index,
                 in_reference_file=reference_file,
                 in_reference_index_file=reference_index_file,
+                in_model_meta_file=DV_MODEL_META,
+                in_model_index_file=DV_MODEL_INDEX,
+                in_model_data_file=DV_MODEL_DATA,
                 in_min_mapq=MIN_MAPQ,
                 in_call_cores=CALL_CORES,
                 in_call_disk=CALL_DISK,
@@ -732,6 +738,9 @@ task runDeepVariant {
         File in_bam_file_index
         File in_reference_file
         File in_reference_index_file
+        File? in_model_meta_file
+        File? in_model_index_file
+        File? in_model_data_file
         Int in_min_mapq
         Int in_call_cores
         Int in_call_disk
@@ -757,6 +766,15 @@ task runDeepVariant {
         # the runner gives.
         ln -f -s ~{in_reference_file} reference.fa
         ln -f -s ~{in_reference_index_file} reference.fa.fai
+        
+        MODEL_ARGS=()
+        if [[ ! -z "~{in_model_meta_file}" ]] ; then
+            # Model files must be adjacent and not at arbitrary paths
+            ln -f -s "~{in_model_meta_file}" model.meta
+            ln -f -s "~{in_model_index_file}" model.index
+            ln -f -s "~{in_model_data_file}" model.data-00000-of-00001
+            MODEL_ARGS=("--customized_model" "model")
+        fi
 
         # When making examples, throw out any reads that are more likely to be
         # mismapped than not (MAPQ 3 or less)
@@ -769,6 +787,7 @@ task runDeepVariant {
         --output_vcf="~{in_sample_name}_deepvariant.vcf.gz" \
         --output_gvcf="~{in_sample_name}_deepvariant.g.vcf.gz" \
         --intermediate_results_dir=tmp_deepvariant \
+        "${MODEL_ARGS[@]}" \
         --num_shards=16
     >>>
     output {
