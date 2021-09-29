@@ -11,8 +11,9 @@ workflow vgMultiMap {
         File INPUT_READ_FILE_2                          # Input sample 2nd read pair fastq.gz
         String SAMPLE_NAME                              # The sample name
         # VG Container used in the pipeline (e.g. quay.io/vgteam/vg:v1.16.0)
-        String VG_CONTAINER = "quay.io/vgteam/vg:ci-3272-f6ec6f200ef9467ec1b62104a852acb187d4d3d8" 
+        String VG_CONTAINER = "quay.io/vgteam/vg:ci-3272-f6ec6f200ef9467ec1b62104a852acb187d4d3d8"
         Int READS_PER_CHUNK = 20000000                  # Number of reads contained in each mapping chunk (20000000 for wgs)
+        String? GIRAFFE_OPTIONS                         # (OPTIONAL) extra command line options for Giraffe mapper
         Array[String]+? CONTIGS                         # (OPTIONAL) Desired reference genome contigs, which are all paths in the XG index.
         File? PATH_LIST_FILE                            # (OPTIONAL) Text file where each line is a path name in the XG index, to use instead of CONTIGS. If neither is given, paths are extracted from the XG and subset to chromosome-looking paths.
         File XG_FILE                                    # Path to .xg index file
@@ -116,6 +117,7 @@ workflow vgMultiMap {
                 in_left_read_pair_chunk_file=read_pair_chunk_files.left,
                 in_right_read_pair_chunk_file=read_pair_chunk_files.right,
                 in_vg_container=VG_CONTAINER,
+                in_giraffe_options=GIRAFFE_OPTIONS,
                 in_xg_file=XG_FILE,
                 in_gbwt_file=GBWT_FILE,
                 in_ggbwt_file=GGBWT_FILE,
@@ -423,6 +425,7 @@ task runVGGIRAFFE {
         File in_min_file
         File in_ref_dict
         String in_vg_container
+        String? in_giraffe_options
         String in_sample_name
         Int in_map_cores
         Int in_map_disk
@@ -447,7 +450,7 @@ task runVGGIRAFFE {
           --read-group "ID:1 LB:lib1 SM:~{in_sample_name} PL:illumina PU:unit1" \
           --sample "~{in_sample_name}" \
           --output-format BAM \
-          --prune-low-cplx \
+          ~{in_giraffe_options} \
           --ref-paths ~{in_ref_dict} \
           -f ~{in_left_read_pair_chunk_file} -f ~{in_right_read_pair_chunk_file} \
           -x ~{in_xg_file} \
