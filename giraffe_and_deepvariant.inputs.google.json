@@ -10,10 +10,14 @@
   "vgMultiMap.TRUTH_VCF": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/HG003_GRCh38_1_22_v4.2.1_benchmark.prefixed_contig_names.vcf.gz",
   "vgMultiMap.TRUTH_VCF_INDEX": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/HG003_GRCh38_1_22_v4.2.1_benchmark.prefixed_contig_names.vcf.gz.tbi",
   "vgMultiMap.EVALUATION_REGIONS_BED": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/HG003_GRCh38_1_22_v4.2.1_benchmark_noinconsistent.prefixed_contig_names.bed",
+  "vgMultiMap.DV_MODEL_META": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/giraffe-hprc-20210920/dv-giraffe-model/model.ckpt-242600.meta",
+  "vgMultiMap.DV_MODEL_INDEX": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/giraffe-hprc-20210920/dv-giraffe-model/model.ckpt-242600.index",
+  "vgMultiMap.DV_MODEL_DATA": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/giraffe-hprc-20210920/dv-giraffe-model/model.ckpt-242600.data-00000-of-00001",
   "vgMultiMap.MIN_MAPQ": "1",
   "vgMultiMap.REALIGNMENT_EXPANSION_BASES": "160",
   "vgMultiMap.SPLIT_READ_DISK": "60",
   "vgMultiMap.MAP_DISK": "200",
   "vgMultiMap.MAP_MEM": "120",
-  "vgMultiMap.VG_CONTAINER": "quay.io/vgteam/vg:ci-3275-35a2bc1c9f1b753879514f38722e404a3edf2662"
+  "vgMultiMap.VG_CONTAINER": "quay.io/vgteam/vg:ci-3281-e2a81ebd3421b3e3c57bcd0ce59da85fb15d555d",
+  "vgMultiMap.GIRAFFE_OPTIONS": "--prune-low-cplx"
 }
