@@ -705,9 +705,3 @@ task runAbraRealigner {
         docker: "quay.io/adamnovak/dceoy-abra2@sha256:43d09d1c10220cfeab09e2763c2c5257884fa4457bcaa224f4e3796a28a24bba"
     }
 }
-
-
-
-}
-
-
