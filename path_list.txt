@@ -22,4 +22,3 @@ GRCh38.chr21
 GRCh38.chr22
 GRCh38.chrX
 GRCh38.chrY
-
