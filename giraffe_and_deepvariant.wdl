@@ -14,8 +14,9 @@ workflow vgMultiMap {
         String VG_CONTAINER = "quay.io/vgteam/vg:ci-3272-f6ec6f200ef9467ec1b62104a852acb187d4d3d8"
         Int READS_PER_CHUNK = 20000000                  # Number of reads contained in each mapping chunk (20000000 for wgs)
         String? GIRAFFE_OPTIONS                         # (OPTIONAL) extra command line options for Giraffe mapper
-        Array[String]+? CONTIGS                         # (OPTIONAL) Desired reference genome contigs, which are all paths in the XG index.
-        File? PATH_LIST_FILE                            # (OPTIONAL) Text file where each line is a path name in the XG index, to use instead of CONTIGS. If neither is given, paths are extracted from the XG and subset to chromosome-looking paths.
+        File? PATH_LIST_FILE                            # (OPTIONAL) Text file where each line is a path name in the XG index. If not given, paths are extracted from the XG and subset to chromosome-looking paths.  Note that they will usually have the GRCh38. prefix.
+        String REFERENCE_PREFIX = ""                    # Remove this off the beginning of path names in surjected BAM (set to match prefix in PATH_LIST_FILE)
+        File? REFERENCE_FASTA_FILE                      # (OPTIONAL) Use this reference instead of extracting paths from the XG. Required if the graph does not contain the entire reference (ex when making GRCh38 calls on a CHM13-based graph).  Must be uncompressed
         File XG_FILE                                    # Path to .xg index file
         File GBWT_FILE                                  # Path to .gbwt index file
         File GGBWT_FILE                                 # Path to .gg index file
@@ -59,44 +60,38 @@ workflow vgMultiMap {
             in_split_read_disk=SPLIT_READ_DISK
     }
 
-    if (!defined(CONTIGS)) {
-        if (!defined(PATH_LIST_FILE)) {
-            # Extract path names to call against from xg file if PATH_LIST_FILE input not provided
-            call extractPathNames {
-                input:
-                    in_xg_file=XG_FILE,
-                    in_vg_container=VG_CONTAINER,
-                    in_extract_disk=MAP_DISK,
-                    in_extract_mem=MAP_MEM
-            }
-            # Filter down to major paths, because GRCh38 includes thousands of
-            # decoys and unplaced/unlocalized contigs, and we can't efficiently
-            # scatter across them, nor do we care about accuracy on them, and also
-            # calling on the decoys is semantically meaningless.
-            call subsetPathNames {
-                input:
-                    in_path_list_file=extractPathNames.output_path_list_file
-            }
+    if (!defined(PATH_LIST_FILE)) {
+        # Extract path names to call against from xg file if PATH_LIST_FILE input not provided
+        call extractPathNames {
+            input:
+                in_xg_file=XG_FILE,
+                in_vg_container=VG_CONTAINER,
+                in_extract_disk=MAP_DISK,
+                in_extract_mem=MAP_MEM
         }
-    } 
-    if (defined(CONTIGS)) {
-        # Put the paths in a file to use later. We know the value is defined,
-        # but WDL is a bit low on unboxing calls for optionals so we use
-        # select_first.
-        File written_path_names_file = write_lines(select_first([CONTIGS]))
+        # Filter down to major paths, because GRCh38 includes thousands of
+        # decoys and unplaced/unlocalized contigs, and we can't efficiently
+        # scatter across them, nor do we care about accuracy on them, and also
+        # calling on the decoys is semantically meaningless.
+        call subsetPathNames {
+            input:
+                in_path_list_file=extractPathNames.output_path_list_file
+        }
     }
-    File pipeline_path_list_file = select_first([PATH_LIST_FILE, subsetPathNames.output_path_list_file, written_path_names_file])
-    
-    # To make sure that we have a FASTA reference with a contig set that
-    # exactly matches the graph, we generate it ourselves, from the graph.
-    call extractReference {
-        input:
-            in_xg_file=XG_FILE,
-            in_vg_container=VG_CONTAINER,
-            in_extract_disk=MAP_DISK,
-            in_extract_mem=MAP_MEM
+    File pipeline_path_list_file = select_first([PATH_LIST_FILE, subsetPathNames.output_path_list_file])
+
+    if (!defined(REFERENCE_FASTA_FILE)) {
+        # To make sure that we have a FASTA reference with a contig set that
+        # exactly matches the graph, we generate it ourselves, from the graph.
+        call extractReference {
+            input:
+                in_xg_file=XG_FILE,
+                in_vg_container=VG_CONTAINER,
+                in_extract_disk=MAP_DISK,
+                in_extract_mem=MAP_MEM
+        }
     }
-    File reference_file = extractReference.reference_file
+    File reference_file = select_first([REFERENCE_FASTA_FILE, extractReference.reference_file])
     
     call indexReference {
         input:
@@ -129,10 +124,23 @@ workflow vgMultiMap {
                 in_map_disk=MAP_DISK,
                 in_map_mem=MAP_MEM
         }
+        # use samtools to replace the header contigs with those from our dict.
+        # this is allows the header to contain contigs that are not in the graph,
+        # which is more general and lets CHM13-based graphs be used to call on GRCh38
+        # also, strip out contig prefixes in the BAM body
+        call fixBAMContigNaming {
+            input:
+                in_bam_file=runVGGIRAFFE.chunk_bam_file,
+                in_ref_dict=reference_dict_file,
+                in_prefix_to_strip=REFERENCE_PREFIX,
+                in_map_cores=MAP_CORES,
+                in_map_disk=MAP_DISK,
+                in_map_mem=MAP_MEM,
+        }
         call sortBAMFile {
             input:
                 in_sample_name=SAMPLE_NAME,
-                in_bam_chunk_file=runVGGIRAFFE.chunk_bam_file,
+                in_bam_chunk_file=fixBAMContigNaming.fixed_bam_file,
                 in_map_cores=MAP_CORES,
                 in_map_disk=MAP_DISK,
                 in_map_mem=MAP_MEM,
@@ -148,14 +156,22 @@ workflow vgMultiMap {
             in_map_disk=MAP_DISK,
             in_map_mem=MAP_MEM
     }
-    
+
+    # strip all the GRCh38's off our path list file.  we need them for surject as they are in the path
+    # but fixBAMContigNaming above stripped them, so we don't need them downstream
+    call fixPathNames {
+        input:
+            in_path_file=pipeline_path_list_file,
+            in_prefix_to_strip=REFERENCE_PREFIX,
+    }
+             
     # Split merged alignment by contigs list
     call splitBAMbyPath { 
         input:
             in_sample_name=SAMPLE_NAME,
             in_merged_bam_file=mergeAlignmentBAMChunks.merged_bam_file,
             in_merged_bam_file_index=mergeAlignmentBAMChunks.merged_bam_file_index,
-            in_path_list_file=pipeline_path_list_file,
+            in_path_list_file=fixPathNames.fixed_path_list_file,
             in_map_cores=MAP_CORES,
             in_map_disk=MAP_DISK,
             in_map_mem=MAP_MEM
@@ -512,6 +528,74 @@ task sortBAMFile {
         memory: in_map_mem + " GB"
         cpu: in_map_cores
         disks: "local-disk " + in_map_disk + " SSD"
+        docker: "quay.io/cmarkello/samtools_picard@sha256:e484603c61e1753c349410f0901a7ba43a2e5eb1c6ce9a240b7f737bba661eb4"
+    }
+}
+
+task fixBAMContigNaming {
+    input {
+        File in_bam_file
+        File in_ref_dict
+        String in_prefix_to_strip
+        Int in_map_cores
+        Int in_map_disk
+        String in_map_mem
+    }
+
+    command <<<
+        # Set the exit code of a pipeline to that of the rightmost command
+        # to exit with a non-zero status, or zero if all commands of the pipeline exit
+        set -o pipefail
+        # cause a bash script to exit immediately when a command fails
+        set -e
+        # cause the bash shell to treat unset variables as an error and exit immediately
+        set -u
+        # echo each line of the script to stdout so we can see what is happening
+        set -o xtrace
+        #to turn off echo do 'set +o xtrace'
+
+        # patch the SQ fields from the dict into a new header
+        samtools view -H ~{in_bam_file} | grep ^@HD > new_header.sam
+        grep ^@SQ ~{in_ref_dict} | awk '{print $1 "\t" $2 "\t" $3}' >> new_header.sam
+        samtools view -H ~{in_bam_file}  | grep -v ^@HD | grep -v ^@SQ >> new_header.sam
+
+        # insert the new header, and strip all instances of the prefix
+        samtools reheader -P new_header.sam  ~{in_bam_file} | \
+          samtools view -h | \
+          sed -e "s/~{in_prefix_to_strip}//g" | \
+          samtools view --threads ~{in_map_cores} -O BAM > fixed.bam   
+    >>>
+    output {
+        File fixed_bam_file = "fixed.bam"
+    }
+    runtime {
+        preemptible: 2
+        time: 90
+        memory: in_map_mem + " GB"
+        cpu: in_map_cores
+        disks: "local-disk " + in_map_disk + " SSD"
+        docker: "quay.io/cmarkello/samtools_picard@sha256:e484603c61e1753c349410f0901a7ba43a2e5eb1c6ce9a240b7f737bba661eb4"
+    }
+}
+
+task fixPathNames {
+    input {
+        File in_path_file
+        String in_prefix_to_strip
+     }
+
+     command <<<
+        sed -e "s/~{in_prefix_to_strip}//g" ~{in_path_file}  > "fixed_names_file"
+     >>>
+    output {
+        File fixed_path_list_file = "fixed_names_file"
+    }
+    runtime {
+        preemptible: 2
+        time: 90
+        memory: 2 + " GB"
+        cpu: 1
+        disks: "local-disk " + 32 + " SSD"
         docker: "quay.io/cmarkello/samtools_picard@sha256:e484603c61e1753c349410f0901a7ba43a2e5eb1c6ce9a240b7f737bba661eb4"
     }
 }
