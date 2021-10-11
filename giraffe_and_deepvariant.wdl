@@ -29,6 +29,7 @@ workflow vgMultiMap {
         File? DV_MODEL_INDEX                            # .index file for a custom DeepVariant calling model
         File? DV_MODEL_DATA                             # .data-00000-of-00001 file for a custom DeepVariant calling model
         Int MIN_MAPQ = 1                                # Minimum MAPQ of reads to use for calling. 4 is the lowest at which a mapping is more likely to be right than wrong.
+        Boolean REALIGN_INDELS = true                   # Whether or not to realign reads near indels
         Int REALIGNMENT_EXPANSION_BASES = 160           # Number of bases to expand indel realignment targets by on either side, to free up read tails in slippery regions.
         Int SPLIT_READ_CORES = 8
         Int SPLIT_READ_DISK = 10
@@ -184,42 +185,46 @@ workflow vgMultiMap {
     }
     scatter (deepvariant_caller_input_files in zip(splitBAMbyPath.bam_contig_files, splitBAMbyPath.bam_contig_files_index)) {
         
-        call runGATKRealignerTargetCreator {
-            input:
-                in_sample_name=SAMPLE_NAME,
-                in_bam_file=deepvariant_caller_input_files.left,
-                in_bam_index_file=deepvariant_caller_input_files.right,
-                in_reference_file=reference_file,
-                in_reference_index_file=reference_index_file,
-                in_reference_dict_file=reference_dict_file,
-                in_call_disk=CALL_DISK
-        }
-        if (REALIGNMENT_EXPANSION_BASES != 0) {
-            # We want the realignment targets to be wider
-            call widenRealignmentTargets {
+        if (REALIGN_INDELS) {
+            call runGATKRealignerTargetCreator {
                 input:
-                    in_target_bed_file=runGATKRealignerTargetCreator.realigner_target_bed,
+                    in_sample_name=SAMPLE_NAME,
+                    in_bam_file=deepvariant_caller_input_files.left,
+                    in_bam_index_file=deepvariant_caller_input_files.right,
+                    in_reference_file=reference_file,
                     in_reference_index_file=reference_index_file,
-                    in_expansion_bases=REALIGNMENT_EXPANSION_BASES,
+                    in_reference_dict_file=reference_dict_file,
+                    in_call_disk=CALL_DISK
+            }
+            if (REALIGNMENT_EXPANSION_BASES != 0) {
+                # We want the realignment targets to be wider
+                call widenRealignmentTargets {
+                    input:
+                        in_target_bed_file=runGATKRealignerTargetCreator.realigner_target_bed,
+                        in_reference_index_file=reference_index_file,
+                        in_expansion_bases=REALIGNMENT_EXPANSION_BASES,
+                        in_call_disk=CALL_DISK
+                }
+            }
+            File target_bed_file = select_first([widenRealignmentTargets.output_target_bed_file, runGATKRealignerTargetCreator.realigner_target_bed])
+            call runAbraRealigner {
+                input:
+                    in_sample_name=SAMPLE_NAME,
+                    in_bam_file=deepvariant_caller_input_files.left,
+                    in_bam_index_file=deepvariant_caller_input_files.right,
+                    in_target_bed_file=target_bed_file,
+                    in_reference_file=reference_file,
+                    in_reference_index_file=reference_index_file,
                     in_call_disk=CALL_DISK
             }
         }
-        File target_bed_file = select_first([widenRealignmentTargets.output_target_bed_file, runGATKRealignerTargetCreator.realigner_target_bed])
-        call runAbraRealigner {
-            input:
-                in_sample_name=SAMPLE_NAME,
-                in_bam_file=deepvariant_caller_input_files.left,
-                in_bam_index_file=deepvariant_caller_input_files.right,
-                in_target_bed_file=target_bed_file,
-                in_reference_file=reference_file,
-                in_reference_index_file=reference_index_file,
-                in_call_disk=CALL_DISK
-        }
+        File calling_bam = select_first([runAbraRealigner.indel_realigned_bam, deepvariant_caller_input_files.left])
+        File calling_bam_index = select_first([runAbraRealigner.indel_realigned_bam_index, deepvariant_caller_input_files.right])
         call runDeepVariant {
             input:
                 in_sample_name=SAMPLE_NAME,
-                in_bam_file=runAbraRealigner.indel_realigned_bam,
-                in_bam_file_index=runAbraRealigner.indel_realigned_bam_index,
+                in_bam_file=calling_bam,
+                in_bam_file_index=calling_bam_index,
                 in_reference_file=reference_file,
                 in_reference_index_file=reference_index_file,
                 in_model_meta_file=DV_MODEL_META,
@@ -290,8 +295,8 @@ workflow vgMultiMap {
         File? output_happy_evaluation_archive = compareCallsHappy.output_evaluation_archive
         File output_vcf = bgzipMergedVCF.output_merged_vcf
         File output_vcf_index = bgzipMergedVCF.output_merged_vcf_index
-        Array[File] output_indelrealigned_bams = runAbraRealigner.indel_realigned_bam
-        Array[File] output_indelrealigned_bam_indexes = runAbraRealigner.indel_realigned_bam_index
+        Array[File] output_calling_bams = calling_bam
+        Array[File] output_calling_bam_indexes = calling_bam_index
     }   
 }
 
@@ -867,7 +872,9 @@ task runDeepVariant {
         
         ln -s ~{in_bam_file} input_bam_file.child.bam
         ln -s ~{in_bam_file_index} input_bam_file.child.bam.bai
-        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.indel_realigned.bam$//g))
+        # Files may or may not be indel realigned in the names.
+        # TODO: move tracking of this to WDL variables!
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g | sed s/.indel_realigned$//g))
 
         # Reference and its index must be adjacent and not at arbitrary paths
         # the runner gives.
