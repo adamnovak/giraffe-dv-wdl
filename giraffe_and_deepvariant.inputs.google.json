@@ -10,10 +10,11 @@
   "vgMultiMap.TRUTH_VCF": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/HG003_GRCh38_1_22_v4.2.1_benchmark.prefixed_contig_names.vcf.gz",
   "vgMultiMap.TRUTH_VCF_INDEX": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/HG003_GRCh38_1_22_v4.2.1_benchmark.prefixed_contig_names.vcf.gz.tbi",
   "vgMultiMap.EVALUATION_REGIONS_BED": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/HG003_GRCh38_1_22_v4.2.1_benchmark_noinconsistent.prefixed_contig_names.bed",
-  "vgMultiMap.DV_MODEL_META": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/giraffe-hprc-20210920/dv-giraffe-model/model.ckpt-242600.meta",
-  "vgMultiMap.DV_MODEL_INDEX": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/giraffe-hprc-20210920/dv-giraffe-model/model.ckpt-242600.index",
-  "vgMultiMap.DV_MODEL_DATA": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/giraffe-hprc-20210920/dv-giraffe-model/model.ckpt-242600.data-00000-of-00001",
+  "vgMultiMap.DV_MODEL_META": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/giraffe-hprc-20211007/dv-giraffe-model/model.ckpt-242000.meta",
+  "vgMultiMap.DV_MODEL_INDEX": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/giraffe-hprc-20211007/dv-giraffe-model/model.ckpt-242000.index",
+  "vgMultiMap.DV_MODEL_DATA": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/giraffe-hprc-20211007/dv-giraffe-model/model.ckpt-242000.data-00000-of-00001",
   "vgMultiMap.MIN_MAPQ": "1",
+  "vgMultiMap.REALIGN_INDELS": "true",
   "vgMultiMap.REALIGNMENT_EXPANSION_BASES": "160",
   "vgMultiMap.SPLIT_READ_DISK": "60",
   "vgMultiMap.MAP_DISK": "200",
@@ -21,3 +22,4 @@
   "vgMultiMap.VG_CONTAINER": "quay.io/vgteam/vg:ci-3289-0eb6859375d347d2e8b078b4d254fadeed3cf062",
   "vgMultiMap.GIRAFFE_OPTIONS": "--prune-low-cplx"
 }
+
