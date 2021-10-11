@@ -124,23 +124,26 @@ workflow vgMultiMap {
                 in_map_disk=MAP_DISK,
                 in_map_mem=MAP_MEM
         }
-        # use samtools to replace the header contigs with those from our dict.
-        # this is allows the header to contain contigs that are not in the graph,
-        # which is more general and lets CHM13-based graphs be used to call on GRCh38
-        # also, strip out contig prefixes in the BAM body
-        call fixBAMContigNaming {
-            input:
-                in_bam_file=runVGGIRAFFE.chunk_bam_file,
-                in_ref_dict=reference_dict_file,
-                in_prefix_to_strip=REFERENCE_PREFIX,
-                in_map_cores=MAP_CORES,
-                in_map_disk=MAP_DISK,
-                in_map_mem=MAP_MEM,
+        if (REFERENCE_PREFIX != "") {
+            # use samtools to replace the header contigs with those from our dict.
+            # this is allows the header to contain contigs that are not in the graph,
+            # which is more general and lets CHM13-based graphs be used to call on GRCh38
+            # also, strip out contig prefixes in the BAM body
+            call fixBAMContigNaming {
+                input:
+                    in_bam_file=runVGGIRAFFE.chunk_bam_file,
+                    in_ref_dict=reference_dict_file,
+                    in_prefix_to_strip=REFERENCE_PREFIX,
+                    in_map_cores=MAP_CORES,
+                    in_map_disk=MAP_DISK,
+                    in_map_mem=MAP_MEM,
+            }
         }
+        File properly_named_bam_file = select_first([fixBAMContigNaming.fixed_bam_file, runVGGIRAFFE.chunk_bam_file]) 
         call sortBAMFile {
             input:
                 in_sample_name=SAMPLE_NAME,
-                in_bam_chunk_file=fixBAMContigNaming.fixed_bam_file,
+                in_bam_chunk_file=properly_named_bam_file,
                 in_map_cores=MAP_CORES,
                 in_map_disk=MAP_DISK,
                 in_map_mem=MAP_MEM,
@@ -156,14 +159,17 @@ workflow vgMultiMap {
             in_map_disk=MAP_DISK,
             in_map_mem=MAP_MEM
     }
-
-    # strip all the GRCh38's off our path list file.  we need them for surject as they are in the path
-    # but fixBAMContigNaming above stripped them, so we don't need them downstream
-    call fixPathNames {
-        input:
-            in_path_file=pipeline_path_list_file,
-            in_prefix_to_strip=REFERENCE_PREFIX,
+    
+    if (REFERENCE_PREFIX != "") {
+        # strip all the GRCh38's off our path list file.  we need them for surject as they are in the path
+        # but fixBAMContigNaming above stripped them, so we don't need them downstream
+        call fixPathNames {
+            input:
+                in_path_file=pipeline_path_list_file,
+                in_prefix_to_strip=REFERENCE_PREFIX,
+        }
     }
+    File properly_named_path_list_file = select_first([fixPathNames.fixed_path_list_file, pipeline_path_list_file])
              
     # Split merged alignment by contigs list
     call splitBAMbyPath { 
@@ -171,7 +177,7 @@ workflow vgMultiMap {
             in_sample_name=SAMPLE_NAME,
             in_merged_bam_file=mergeAlignmentBAMChunks.merged_bam_file,
             in_merged_bam_file_index=mergeAlignmentBAMChunks.merged_bam_file_index,
-            in_path_list_file=fixPathNames.fixed_path_list_file,
+            in_path_list_file=properly_named_path_list_file,
             in_map_cores=MAP_CORES,
             in_map_disk=MAP_DISK,
             in_map_mem=MAP_MEM
