@@ -119,7 +119,7 @@ workflow vgMultiMap {
                 in_ggbwt_file=GGBWT_FILE,
                 in_dist_file=DIST_FILE,
                 in_min_file=MIN_FILE,
-                in_ref_dict=pipeline_path_list_file,
+                in_ref_dict=reference_dict_file,
                 in_sample_name=SAMPLE_NAME,
                 in_map_cores=MAP_CORES,
                 in_map_disk=MAP_DISK,
