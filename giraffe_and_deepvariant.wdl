@@ -103,6 +103,9 @@ workflow vgMultiMap {
     File reference_index_file = indexReference.reference_index_file
     File reference_dict_file = indexReference.reference_dict_file
 
+    # if we're taking the dictionary from Fasta, we just want the paths
+    File giraffe_input_paths_file = if (defined(REFERENCE_FASTA_FILE) && defined(PATH_LIST_FILE)) then pipeline_path_list_file else reference_dict_file
+
     ################################################################
     # Distribute vg mapping opperation over each chunked read pair #
     ################################################################
@@ -119,7 +122,7 @@ workflow vgMultiMap {
                 in_ggbwt_file=GGBWT_FILE,
                 in_dist_file=DIST_FILE,
                 in_min_file=MIN_FILE,
-                in_ref_dict=reference_dict_file,
+                in_ref_dict=giraffe_input_paths_file,
                 in_sample_name=SAMPLE_NAME,
                 in_map_cores=MAP_CORES,
                 in_map_disk=MAP_DISK,
