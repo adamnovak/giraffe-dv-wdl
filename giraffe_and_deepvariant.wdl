@@ -585,7 +585,7 @@ task indexBAMFile {
         set -o xtrace
         #to turn off echo do 'set +o xtrace'
         samtools index \
-          --threads ~{in_map_cores} \
+          -@ ~{in_map_cores} \
           ~{in_bam_file} \
           index.bai
     >>>
