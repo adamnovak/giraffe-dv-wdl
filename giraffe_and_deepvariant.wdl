@@ -584,6 +584,8 @@ task indexBAMFile {
         # echo each line of the script to stdout so we can see what is happening
         set -o xtrace
         #to turn off echo do 'set +o xtrace'
+        
+        # Never use Samtools 1.4.1 here! See https://github.com/samtools/samtools/issues/687
         samtools index \
           -@ ~{in_map_cores} \
           ~{in_bam_file} \
