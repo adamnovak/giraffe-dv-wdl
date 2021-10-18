@@ -930,12 +930,11 @@ task leftShiftBAMFile {
         ln -f -s ~{in_reference_file} reference.fa
         ln -f -s ~{in_reference_index_file} reference.fa.fai
         
-        bam convert \
-            --in  ~{in_bam_file} \
-            --out ~{in_sample_name}.${CONTIG_ID}.left_shifted.bam \
-            --refFile reference.fa \
-            --lshift \
-            --useOrigSeq
+        bamleftalign \
+            <~{in_bam_file} \
+            >~{in_sample_name}.${CONTIG_ID}.left_shifted.bam \
+            --fasta-reference reference.fa \
+            --compressed
     >>>
     output {
         File left_shifted_bam = glob("~{in_sample_name}.*.left_shifted.bam")[0]
@@ -946,7 +945,7 @@ task leftShiftBAMFile {
         memory: 20 + " GB"
         cpu: 1
         disks: "local-disk " + in_call_disk + " SSD"
-        docker: "marrip/bamutil@sha256:640a8899d2d390bc65e12fe5748f22fe62c59c114cd9df0350e73acf0e8fed63"
+        docker: "biocontainers/freebayes:v1.2.0-2-deb_cv1"
     }
 }
 
