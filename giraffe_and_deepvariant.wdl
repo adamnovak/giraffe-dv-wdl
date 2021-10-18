@@ -218,7 +218,8 @@ workflow vgMultiMap {
                     in_reference_index_file=reference_index_file,
                     in_call_disk=CALL_DISK
             }
-        } else {
+        }
+        if (!REALIGN_INDELS) {
             # Just left-shift each read individually
             call leftShiftBAMFile {
                 input:
