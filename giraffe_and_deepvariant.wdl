@@ -186,6 +186,7 @@ workflow vgMultiMap {
     scatter (deepvariant_caller_input_files in zip(splitBAMbyPath.bam_contig_files, splitBAMbyPath.bam_contig_files_index)) {
         
         if (REALIGN_INDELS) {
+            # Do indel realignment
             call runGATKRealignerTargetCreator {
                 input:
                     in_sample_name=SAMPLE_NAME,
@@ -217,9 +218,28 @@ workflow vgMultiMap {
                     in_reference_index_file=reference_index_file,
                     in_call_disk=CALL_DISK
             }
+        } else {
+            # Just left-shift each read individually
+            call leftShiftBAMFile {
+                input:
+                    in_sample_name=SAMPLE_NAME,
+                    in_bam_file=deepvariant_caller_input_files.left,
+                    in_reference_file=reference_file,
+                    in_reference_index_file=reference_index_file,
+                    in_call_disk=CALL_DISK
+            }
+            # This tool can't make an index itself so we need to re-index the BAM
+            call indexBAMFile {
+            input:
+                in_sample_name=SAMPLE_NAME,
+                in_bam_file=leftShiftBAMFile.left_shifted_bam,
+                in_map_cores=MAP_CORES,
+                in_map_disk=MAP_DISK,
+                in_map_mem=MAP_MEM
+            }
         }
-        File calling_bam = select_first([runAbraRealigner.indel_realigned_bam, deepvariant_caller_input_files.left])
-        File calling_bam_index = select_first([runAbraRealigner.indel_realigned_bam_index, deepvariant_caller_input_files.right])
+        File calling_bam = select_first([runAbraRealigner.indel_realigned_bam, leftShiftBAMFile.left_shifted_bam])
+        File calling_bam_index = select_first([runAbraRealigner.indel_realigned_bam_index, indexBAMFile.bam_index])
         call runDeepVariant {
             input:
                 in_sample_name=SAMPLE_NAME,
@@ -543,6 +563,44 @@ task sortBAMFile {
     }
 }
 
+task indexBAMFile {
+    input {
+        String in_sample_name
+        File in_bam_file
+        Int in_map_cores
+        Int in_map_disk
+        String in_map_mem
+    }
+
+    command <<<
+        # Set the exit code of a pipeline to that of the rightmost command
+        # to exit with a non-zero status, or zero if all commands of the pipeline exit
+        set -o pipefail
+        # cause a bash script to exit immediately when a command fails
+        set -e
+        # cause the bash shell to treat unset variables as an error and exit immediately
+        set -u
+        # echo each line of the script to stdout so we can see what is happening
+        set -o xtrace
+        #to turn off echo do 'set +o xtrace'
+        samtools index \
+          --threads ~{in_map_cores} \
+          ~{in_bam_file} \
+          index.bai
+    >>>
+    output {
+        File bam_index = "index.bai"
+    }
+    runtime {
+        preemptible: 2
+        time: 90
+        memory: in_map_mem + " GB"
+        cpu: in_map_cores
+        disks: "local-disk " + in_map_disk + " SSD"
+        docker: "quay.io/cmarkello/samtools_picard@sha256:e484603c61e1753c349410f0901a7ba43a2e5eb1c6ce9a240b7f737bba661eb4"
+    }
+}
+
 task fixBAMContigNaming {
     input {
         File in_bam_file
@@ -828,7 +886,7 @@ task runAbraRealigner {
     >>>
     output {
         File indel_realigned_bam = glob("~{in_sample_name}.*.indel_realigned.bam")[0]
-        File indel_realigned_bam_index = glob("~{in_sample_name}.*.indel_realigned.bai")[0]
+        File indel_realigned_bam_index = glob("~{in_sample_name}.*.indel_realigned*bai")[0]
     }
     runtime {
         preemptible: 2
@@ -840,6 +898,54 @@ task runAbraRealigner {
         # and it stopped working. A known good version has been rehosted on
         # Quay in case Docker Hub deletes it.
         docker: "quay.io/adamnovak/dceoy-abra2@sha256:43d09d1c10220cfeab09e2763c2c5257884fa4457bcaa224f4e3796a28a24bba"
+    }
+}
+
+task leftShiftBAMFile {
+    input {
+        String in_sample_name
+        File in_bam_file
+        File in_reference_file
+        File in_reference_index_file
+        Int in_call_disk
+    }
+
+    command <<<
+        # Set the exit code of a pipeline to that of the rightmost command
+        # to exit with a non-zero status, or zero if all commands of the pipeline exit
+        set -o pipefail
+        # cause a bash script to exit immediately when a command fails
+        set -e
+        # cause the bash shell to treat unset variables as an error and exit immediately
+        set -u
+        # echo each line of the script to stdout so we can see what is happening
+        set -o xtrace
+        #to turn off echo do 'set +o xtrace'
+
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g))
+
+        # Reference and its index must be adjacent and not at arbitrary paths
+        # the runner gives.
+        ln -f -s ~{in_reference_file} reference.fa
+        ln -f -s ~{in_reference_index_file} reference.fa.fai
+        
+        bam convert \
+            --in  ~{in_bam_file} \
+            --out ~{in_sample_name}.${CONTIG_ID}.left_shifted.bam \
+            --refFile reference.fa \
+            --lshift \
+            --useOrigSeq
+    >>>
+    output {
+        File left_shifted_bam = glob("~{in_sample_name}.*.left_shifted.bam")[0]
+    }
+    runtime {
+        preemptible: 2
+        time: 180
+        memory: 20 + " GB"
+        cpu: 1
+        disks: "local-disk " + in_call_disk + " SSD"
+        docker: "marrip/bamutil@sha256:640a8899d2d390bc65e12fe5748f22fe62c59c114cd9df0350e73acf0e8fed63"
     }
 }
 
@@ -872,9 +978,9 @@ task runDeepVariant {
         
         ln -s ~{in_bam_file} input_bam_file.child.bam
         ln -s ~{in_bam_file_index} input_bam_file.child.bam.bai
-        # Files may or may not be indel realigned in the names.
-        # TODO: move tracking of this to WDL variables!
-        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g | sed s/.indel_realigned$//g))
+        # Files may or may not be indel realigned or left shifted in the names.
+        # TODO: move tracking of contig ID to WDL variables!
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g | sed s/.indel_realigned$//g | sed s/.left_shifted$//g))
 
         # Reference and its index must be adjacent and not at arbitrary paths
         # the runner gives.
