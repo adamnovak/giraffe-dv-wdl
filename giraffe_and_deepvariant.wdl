@@ -184,14 +184,30 @@ workflow vgMultiMap {
             in_map_mem=MAP_MEM
     }
     scatter (deepvariant_caller_input_files in zip(splitBAMbyPath.bam_contig_files, splitBAMbyPath.bam_contig_files_index)) {
-        
+        # Just left-shift each read individually
+        call leftShiftBAMFile {
+            input:
+                in_sample_name=SAMPLE_NAME,
+                in_bam_file=deepvariant_caller_input_files.left,
+                in_reference_file=reference_file,
+                in_reference_index_file=reference_index_file,
+                in_call_disk=CALL_DISK
+        }
+        # This tool can't make an index itself so we need to re-index the BAM
+        call indexBAMFile {
+        input:
+            in_sample_name=SAMPLE_NAME,
+            in_bam_file=leftShiftBAMFile.left_shifted_bam,
+            in_map_disk=MAP_DISK,
+            in_map_mem=MAP_MEM
+        }
         if (REALIGN_INDELS) {
             # Do indel realignment
             call runGATKRealignerTargetCreator {
                 input:
                     in_sample_name=SAMPLE_NAME,
-                    in_bam_file=deepvariant_caller_input_files.left,
-                    in_bam_index_file=deepvariant_caller_input_files.right,
+                    in_bam_file=leftShiftBAMFile.left_shifted_bam,
+                    in_bam_index_file=indexBAMFile.bam_index,
                     in_reference_file=reference_file,
                     in_reference_index_file=reference_index_file,
                     in_reference_dict_file=reference_dict_file,
@@ -211,31 +227,12 @@ workflow vgMultiMap {
             call runAbraRealigner {
                 input:
                     in_sample_name=SAMPLE_NAME,
-                    in_bam_file=deepvariant_caller_input_files.left,
-                    in_bam_index_file=deepvariant_caller_input_files.right,
+                    in_bam_file=leftShiftBAMFile.left_shifted_bam,
+                    in_bam_index_file=indexBAMFile.bam_index,
                     in_target_bed_file=target_bed_file,
                     in_reference_file=reference_file,
                     in_reference_index_file=reference_index_file,
                     in_call_disk=CALL_DISK
-            }
-        }
-        if (!REALIGN_INDELS) {
-            # Just left-shift each read individually
-            call leftShiftBAMFile {
-                input:
-                    in_sample_name=SAMPLE_NAME,
-                    in_bam_file=deepvariant_caller_input_files.left,
-                    in_reference_file=reference_file,
-                    in_reference_index_file=reference_index_file,
-                    in_call_disk=CALL_DISK
-            }
-            # This tool can't make an index itself so we need to re-index the BAM
-            call indexBAMFile {
-            input:
-                in_sample_name=SAMPLE_NAME,
-                in_bam_file=leftShiftBAMFile.left_shifted_bam,
-                in_map_disk=MAP_DISK,
-                in_map_mem=MAP_MEM
             }
         }
         File calling_bam = select_first([runAbraRealigner.indel_realigned_bam, leftShiftBAMFile.left_shifted_bam])
