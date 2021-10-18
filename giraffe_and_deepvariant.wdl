@@ -234,7 +234,6 @@ workflow vgMultiMap {
             input:
                 in_sample_name=SAMPLE_NAME,
                 in_bam_file=leftShiftBAMFile.left_shifted_bam,
-                in_map_cores=MAP_CORES,
                 in_map_disk=MAP_DISK,
                 in_map_mem=MAP_MEM
             }
@@ -568,7 +567,6 @@ task indexBAMFile {
     input {
         String in_sample_name
         File in_bam_file
-        Int in_map_cores
         Int in_map_disk
         String in_map_mem
     }
@@ -587,7 +585,6 @@ task indexBAMFile {
         
         # Never use Samtools 1.4.1 here! See https://github.com/samtools/samtools/issues/687
         samtools index \
-          -@ ~{in_map_cores} \
           ~{in_bam_file} \
           index.bai
     >>>
@@ -598,7 +595,7 @@ task indexBAMFile {
         preemptible: 2
         time: 90
         memory: in_map_mem + " GB"
-        cpu: in_map_cores
+        cpu: 1
         disks: "local-disk " + in_map_disk + " SSD"
         docker: "quay.io/cmarkello/samtools_picard@sha256:e484603c61e1753c349410f0901a7ba43a2e5eb1c6ce9a240b7f737bba661eb4"
     }
