@@ -167,16 +167,16 @@ workflow generateTrainingData {
             # Just left-shift each read individually
             call leftShiftBAMFile {
                 input:
-                    in_sample_name=SAMPLE_NAME,
+                    in_sample_name=sample_name,
                     in_bam_file=deepvariant_caller_input_files.left,
                     in_reference_file=reference_file,
                     in_reference_index_file=reference_index_file,
-                    in_call_disk=CALL_DISK
+                    in_realign_disk=REALIGN_DISK
             }
             # This tool can't make an index itself so we need to re-index the BAM
             call indexBAMFile {
             input:
-                in_sample_name=SAMPLE_NAME,
+                in_sample_name=sample_name,
                 in_bam_file=leftShiftBAMFile.left_shifted_bam,
                 in_map_disk=MAP_DISK,
                 in_map_mem=MAP_MEM
@@ -779,7 +779,7 @@ task leftShiftBAMFile {
         File in_bam_file
         File in_reference_file
         File in_reference_index_file
-        Int in_call_disk
+        Int in_realign_disk
     }
 
     command <<<
@@ -815,7 +815,7 @@ task leftShiftBAMFile {
         time: 180
         memory: 20 + " GB"
         cpu: 1
-        disks: "local-disk " + in_call_disk + " SSD"
+        disks: "local-disk " + in_realign_disk + " SSD"
         docker: "biocontainers/freebayes:v1.2.0-2-deb_cv1"
     }
 }
