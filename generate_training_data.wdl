@@ -164,12 +164,28 @@ workflow generateTrainingData {
                 in_map_mem=MAP_MEM
         }
         scatter (deepvariant_caller_input_files in zip(splitBAMbyPath.bam_contig_files, splitBAMbyPath.bam_contig_files_index)) {
-            
+            # Just left-shift each read individually
+            call leftShiftBAMFile {
+                input:
+                    in_sample_name=SAMPLE_NAME,
+                    in_bam_file=deepvariant_caller_input_files.left,
+                    in_reference_file=reference_file,
+                    in_reference_index_file=reference_index_file,
+                    in_call_disk=CALL_DISK
+            }
+            # This tool can't make an index itself so we need to re-index the BAM
+            call indexBAMFile {
+            input:
+                in_sample_name=SAMPLE_NAME,
+                in_bam_file=leftShiftBAMFile.left_shifted_bam,
+                in_map_disk=MAP_DISK,
+                in_map_mem=MAP_MEM
+            } 
             call runGATKRealignerTargetCreator {
                 input:
                     in_sample_name=sample_name,
-                    in_bam_file=deepvariant_caller_input_files.left,
-                    in_bam_index_file=deepvariant_caller_input_files.right,
+                    in_bam_file=leftShiftBAMFile.left_shifted_bam,
+                    in_bam_index_file=indexBAMFile.bam_index,
                     in_reference_file=reference_file,
                     in_reference_index_file=reference_index_file,
                     in_reference_dict_file=reference_dict_file,
@@ -189,8 +205,8 @@ workflow generateTrainingData {
             call runAbraRealigner {
                 input:
                     in_sample_name=sample_name,
-                    in_bam_file=deepvariant_caller_input_files.left,
-                    in_bam_index_file=deepvariant_caller_input_files.right,
+                    in_bam_file=leftShiftBAMFile.left_shifted_bam,
+                    in_bam_index_file=indexBAMFile.bam_index,
                     in_target_bed_file=target_bed_file,
                     in_reference_file=reference_file,
                     in_reference_index_file=reference_index_file,
@@ -205,7 +221,17 @@ workflow generateTrainingData {
                     in_map_mem=MAP_MEM,
             }
         }
+        Array[File] shifted_chunk_bam_files = select_all(leftShiftBAMFile.left_shifted_bam)
         Array[File] realignment_chunk_bam_files = select_all(sortRealignedBAMFile.sorted_chunk_bam)
+        
+        call mergeAlignmentBAMChunks as mergeShiftedBAMChunks {
+            input:
+                in_sample_name=sample_name,
+                in_alignment_bam_chunk_files=shifted_chunk_bam_files,
+                in_map_cores=MAP_CORES,
+                in_map_disk=MAP_DISK,
+                in_map_mem=MAP_MEM
+        }
 
         call mergeAlignmentBAMChunks as mergeRealignmentBAMChunks {
             input:
@@ -221,11 +247,14 @@ workflow generateTrainingData {
     # Collect the files we are interested in
     Array[File] output_aligned_bam = select_all(mergeAlignmentBAMChunks.merged_bam_file)
     Array[File] output_aligned_bam_index = select_all(mergeAlignmentBAMChunks.merged_bam_file_index)
+    Array[File] output_shifted_bam = select_all(mergeShiftedBAMChunks.merged_bam_file)
+    Array[File] output_shifted_bam_index = select_all(mergeShiftedBAMChunks.merged_bam_file_index)
     Array[File] output_realigned_bam = select_all(mergeRealignmentBAMChunks.merged_bam_file)
     Array[File] output_realigned_bam_index = select_all(mergeRealignmentBAMChunks.merged_bam_file_index)
     
     output {
         Array[Pair[File, File]] output_aligned_indexed_bam = zip(output_aligned_bam, output_aligned_bam_index)
+        Array[Pair[File, File]] output_shifted_indexed_bam = zip(output_shifted_bam, output_shifted_bam_index)
         Array[Pair[File, File]] output_realigned_indexed_bam = zip(output_realigned_bam, output_realigned_bam_index)
     }   
 }
@@ -473,6 +502,44 @@ task sortBAMFile {
     }
 }
 
+task indexBAMFile {
+    input {
+        String in_sample_name
+        File in_bam_file
+        Int in_map_disk
+        String in_map_mem
+    }
+
+    command <<<
+        # Set the exit code of a pipeline to that of the rightmost command
+        # to exit with a non-zero status, or zero if all commands of the pipeline exit
+        set -o pipefail
+        # cause a bash script to exit immediately when a command fails
+        set -e
+        # cause the bash shell to treat unset variables as an error and exit immediately
+        set -u
+        # echo each line of the script to stdout so we can see what is happening
+        set -o xtrace
+        #to turn off echo do 'set +o xtrace'
+        
+        # Never use Samtools 1.4.1 here! See https://github.com/samtools/samtools/issues/687
+        samtools index \
+          ~{in_bam_file} \
+          index.bai
+    >>>
+    output {
+        File bam_index = "index.bai"
+    }
+    runtime {
+        preemptible: 2
+        time: 90
+        memory: in_map_mem + " GB"
+        cpu: 1
+        disks: "local-disk " + in_map_disk + " SSD"
+        docker: "quay.io/cmarkello/samtools_picard@sha256:e484603c61e1753c349410f0901a7ba43a2e5eb1c6ce9a240b7f737bba661eb4"
+    }
+}
+
 task mergeAlignmentBAMChunks {
     input {
         String in_sample_name
@@ -580,7 +647,7 @@ task runGATKRealignerTargetCreator {
 
         ln -f -s ~{in_bam_file} input_bam_file.bam
         ln -f -s ~{in_bam_index_file} input_bam_file.bam.bai
-        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g))
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g | sed s/.indel_realigned$//g | sed s/.left_shifted$//g))
 
         # Reference and its index must be adjacent and not at arbitrary paths
         # the runner gives.
@@ -674,7 +741,7 @@ task runAbraRealigner {
 
         ln -f -s ~{in_bam_file} input_bam_file.bam
         ln -f -s ~{in_bam_index_file} input_bam_file.bam.bai
-        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g))
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g | sed s/.indel_realigned$//g | sed s/.left_shifted$//g))
 
         # Reference and its index must be adjacent and not at arbitrary paths
         # the runner gives.
@@ -705,3 +772,51 @@ task runAbraRealigner {
         docker: "quay.io/adamnovak/dceoy-abra2@sha256:43d09d1c10220cfeab09e2763c2c5257884fa4457bcaa224f4e3796a28a24bba"
     }
 }
+
+task leftShiftBAMFile {
+    input {
+        String in_sample_name
+        File in_bam_file
+        File in_reference_file
+        File in_reference_index_file
+        Int in_call_disk
+    }
+
+    command <<<
+        # Set the exit code of a pipeline to that of the rightmost command
+        # to exit with a non-zero status, or zero if all commands of the pipeline exit
+        set -o pipefail
+        # cause a bash script to exit immediately when a command fails
+        set -e
+        # cause the bash shell to treat unset variables as an error and exit immediately
+        set -u
+        # echo each line of the script to stdout so we can see what is happening
+        set -o xtrace
+        #to turn off echo do 'set +o xtrace'
+
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g | sed s/.indel_realigned$//g | sed s/.left_shifted$//g))
+
+        # Reference and its index must be adjacent and not at arbitrary paths
+        # the runner gives.
+        ln -f -s ~{in_reference_file} reference.fa
+        ln -f -s ~{in_reference_index_file} reference.fa.fai
+        
+        bamleftalign \
+            <~{in_bam_file} \
+            >~{in_sample_name}.${CONTIG_ID}.left_shifted.bam \
+            --fasta-reference reference.fa \
+            --compressed
+    >>>
+    output {
+        File left_shifted_bam = glob("~{in_sample_name}.*.left_shifted.bam")[0]
+    }
+    runtime {
+        preemptible: 2
+        time: 180
+        memory: 20 + " GB"
+        cpu: 1
+        disks: "local-disk " + in_call_disk + " SSD"
+        docker: "biocontainers/freebayes:v1.2.0-2-deb_cv1"
+    }
+}
+
