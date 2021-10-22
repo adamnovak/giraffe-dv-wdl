@@ -1,0 +1,28 @@
+{
+  "generateTrainingData.XG_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GRCh38-f1g-90-mc-aug11-clip.d9.m.1000.xg",
+  "generateTrainingData.GBWT_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GRCh38-f1g-90-mc-aug11-clip.d9.m.1000.gbwt",
+  "generateTrainingData.GGBWT_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GRCh38-f1g-90-mc-aug11-clip.d9.m.1000.gg",
+  "generateTrainingData.MIN_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GRCh38-f1g-90-mc-aug11-clip.d9.m.1000.min",
+  "generateTrainingData.DIST_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GRCh38-f1g-90-mc-aug11-clip.d9.m.1000.dist",
+  "generateTrainingData.SAMPLE_NAME": [
+    "HG001",
+    "HG002",
+    "HG005"
+  ],
+  "generateTrainingData.INPUT_READ_FILE_1": [
+    "gs://deepvariant/benchmarking/fastq/wgs_pcr_free/30x/HG001.novaseq.pcr-free.30x.R1.fastq.gz",
+    "gs://deepvariant/benchmarking/fastq/wgs_pcr_free/30x/HG002.novaseq.pcr-free.30x.R1.fastq.gz",
+    "gs://deepvariant/benchmarking/fastq/wgs_pcr_free/30x/HG005.novaseq.pcr-free.30x.R1.fastq.gz"
+  ],
+  "generateTrainingData.INPUT_READ_FILE_2": [
+    "gs://deepvariant/benchmarking/fastq/wgs_pcr_free/30x/HG001.novaseq.pcr-free.30x.R2.fastq.gz",
+    "gs://deepvariant/benchmarking/fastq/wgs_pcr_free/30x/HG002.novaseq.pcr-free.30x.R2.fastq.gz",
+    "gs://deepvariant/benchmarking/fastq/wgs_pcr_free/30x/HG005.novaseq.pcr-free.30x.R2.fastq.gz"
+  ],
+  "generateTrainingData.REALIGNMENT_EXPANSION_BASES": "160",
+  "generateTrainingData.SPLIT_READ_DISK": "60",
+  "generateTrainingData.MAP_DISK": "200",
+  "generateTrainingData.MAP_MEM": "120",
+  "generateTrainingData.VG_CONTAINER": "quay.io/vgteam/vg:ci-3289-0eb6859375d347d2e8b078b4d254fadeed3cf062",
+  "generateTrainingData.GIRAFFE_OPTIONS": "--prune-low-cplx"
+}
