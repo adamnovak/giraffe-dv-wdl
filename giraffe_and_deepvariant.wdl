@@ -454,7 +454,7 @@ task indexReference {
         # Subset to just the paths we care about (may be the whole file) so we
         # get a good dict with just those paths, becuse they must exist in the
         # graph.
-        samtools faidx -o ref.fa base.fa $(cat ~{in_path_list_file})
+        samtools faidx base.fa $(cat ~{in_path_list_file}) >ref.fa
         
         # Index the subset reference
         samtools faidx ref.fa 
