@@ -92,14 +92,17 @@ workflow vgMultiMap {
                 in_extract_mem=MAP_MEM
         }
     }
-    File reference_file = select_first([REFERENCE_FASTA_FILE, extractReference.reference_file])
+    File base_reference_file = select_first([REFERENCE_FASTA_FILE, extractReference.reference_file])
     
+    # Subset FASTA to paths we care about and make a dict of it and just those paths.
     call indexReference {
         input:
-            in_reference_file=reference_file,
+            in_path_list_file=pipeline_path_list_file,
+            in_base_reference_file=base_reference_file,
             in_index_disk=MAP_DISK,
             in_index_mem=MAP_MEM
     }
+    File reference_file = indexReference.reference_file
     File reference_index_file = indexReference.reference_index_file
     File reference_dict_file = indexReference.reference_dict_file
 
@@ -437,7 +440,8 @@ task extractReference {
 
 task indexReference {
     input {
-        File in_reference_file
+        File in_path_list_file
+        File in_base_reference_file
         Int in_index_mem
         Int in_index_disk
     }
@@ -445,9 +449,15 @@ task indexReference {
     command <<<
         set -eux -o pipefail
         
-        ln -s ~{in_reference_file} ref.fa
+        ln -s ~{in_base_reference_file} base.fa
         
-        samtools faidx ref.fa
+        # Subset to just the paths we care about (may be the whole file) so we
+        # get a good dict with just those paths, becuse they must exist in the
+        # graph.
+        samtools faidx -r ~{in_path_list_file} -o ref.fa base.fa
+        
+        # Index the subset reference
+        samtools faidx ref.fa 
         
         # Save a reference copy by making the dict now
         java -jar /usr/picard/picard.jar CreateSequenceDictionary \
@@ -455,6 +465,7 @@ task indexReference {
           O=ref.dict
     >>>
     output {
+        File reference_file = "ref.fa"
         File reference_index_file = "ref.fa.fai"
         File reference_dict_file = "ref.dict"
     }
