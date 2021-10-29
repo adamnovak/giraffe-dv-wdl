@@ -122,6 +122,16 @@ workflow vgMultiMap {
                 in_ggbwt_file=GGBWT_FILE,
                 in_dist_file=DIST_FILE,
                 in_min_file=MIN_FILE,
+                # We always need to pass a full dict file here, with lengths,
+                # because if we pass just path lists and the paths are not
+                # completely contained in the graph (like if we're working on
+                # GRCh38 paths in a CHM13-based graph), giraffe won't be able
+                # to get the path lengths and will crash.
+                # TODO: Somehow this problem is supposed to go away if we pull
+                # any GRCh38. prefix off the path names by setting
+                # REFERENCE_PREFIX and making sure the prefix isn't in the
+                # truth set.
+                # See <https://github.com/adamnovak/giraffe-dv-wdl/pull/2#issuecomment-955096920>
                 in_ref_dict=reference_dict_file,
                 in_sample_name=SAMPLE_NAME,
                 in_map_cores=MAP_CORES,
