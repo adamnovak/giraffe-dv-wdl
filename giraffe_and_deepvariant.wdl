@@ -1035,6 +1035,8 @@ task runDeepVariant {
     }
     runtime {
         preemptible: 2
+        # Terra will fail the job randomly and complain it couldn't install the GPU driver, so retry
+        maxRetries: 3
         memory: in_call_mem + " GB"
         cpu: 8
         gpuType: "nvidia-tesla-t4"
