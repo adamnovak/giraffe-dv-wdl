@@ -15,7 +15,7 @@
   "vgMultiMap.MIN_MAPQ": "1",
   "vgMultiMap.REALIGN_INDELS": "true",
   "vgMultiMap.REALIGNMENT_EXPANSION_BASES": "160",
-  "vgMultiMap.SPLIT_READ_DISK": "60",
+  "vgMultiMap.SPLIT_READ_DISK": "200",
   "vgMultiMap.MAP_DISK": "200",
   "vgMultiMap.MAP_MEM": "120",
   "vgMultiMap.VG_CONTAINER": "quay.io/vgteam/vg:ci-3318-3d63572e07bd6ec0fefa0e198ab92575101e70b6",
