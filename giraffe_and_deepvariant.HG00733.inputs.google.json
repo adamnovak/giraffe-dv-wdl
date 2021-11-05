@@ -1,0 +1,24 @@
+{
+  "vgMultiMap.XG_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/CHM13-f1g-90-mc-aug11-clip.d9.m.1000.GRCh38.xg",
+  "vgMultiMap.GBWT_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/CHM13-f1g-90-mc-aug11-clip.d9.m.1000.gbwt",
+  "vgMultiMap.GGBWT_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/CHM13-f1g-90-mc-aug11-clip.d9.m.1000.gg",
+  "vgMultiMap.MIN_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/CHM13-f1g-90-mc-aug11-clip.d9.m.1000.min",
+  "vgMultiMap.DIST_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/CHM13-f1g-90-mc-aug11-clip.d9.m.1000.dist",
+  "vgMultiMap.REFERENCE_FASTA_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GRCh38.extracted.from.aug11.fa",
+  "vgMultiMap.PATH_LIST_FILE": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/GRCh38.path_list.txt",
+  "vgMultiMap.SAMPLE_NAME": "HG00733",
+  "vgMultiMap.INPUT_READ_FILE_1": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/HG00733_all_runs.read1.fq.gz",
+  "vgMultiMap.INPUT_READ_FILE_2": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/HG00733_all_runs.read2.fq.gz",
+  "vgMultiMap.DV_MODEL_META": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/giraffe-hprc-20211021/dv-giraffe-model/model.ckpt-267000.meta",
+  "vgMultiMap.DV_MODEL_INDEX": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/giraffe-hprc-20211021/dv-giraffe-model/model.ckpt-267000.index",
+  "vgMultiMap.DV_MODEL_DATA": "gs://fc-0e9b62da-2dd8-42e5-bb50-8d08e7cdebc3/giraffe-hprc-20211021/dv-giraffe-model/model.ckpt-267000.data-00000-of-00001",
+  "vgMultiMap.MIN_MAPQ": "1",
+  "vgMultiMap.REALIGN_INDELS": "true",
+  "vgMultiMap.REALIGNMENT_EXPANSION_BASES": "160",
+  "vgMultiMap.SPLIT_READ_DISK": "60",
+  "vgMultiMap.MAP_DISK": "200",
+  "vgMultiMap.MAP_MEM": "120",
+  "vgMultiMap.VG_CONTAINER": "quay.io/vgteam/vg:ci-3289-0eb6859375d347d2e8b078b4d254fadeed3cf062",
+  "vgMultiMap.GIRAFFE_OPTIONS": "--prune-low-cplx"
+}
+
