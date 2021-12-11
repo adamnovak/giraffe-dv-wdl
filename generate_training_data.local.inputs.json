@@ -1,0 +1,25 @@
+{
+  "generateTrainingData.XG_FILE": "graph.xg",
+  "generateTrainingData.GBWT_FILE": "graph.gbwt",
+  "generateTrainingData.GGBWT_FILE": "graph.gg",
+  "generateTrainingData.MIN_FILE": "graph.min",
+  "generateTrainingData.DIST_FILE": "graph.dist",
+  "generateTrainingData.SAMPLE_NAME": [
+    "s0",
+    "s1"
+  ],
+  "generateTrainingData.INPUT_READ_FILE_1": [
+    "reads_s0_1.fastq.gz",
+    "reads_s1_1.fastq.gz"
+  ],
+  "generateTrainingData.INPUT_READ_FILE_2": [
+    "reads_s0_2.fastq.gz",
+    "reads_s1_2.fastq.gz"
+  ],
+  "generateTrainingData.REALIGNMENT_EXPANSION_BASES": "160",
+  "generateTrainingData.SPLIT_READ_DISK": "60",
+  "generateTrainingData.MAP_DISK": "200",
+  "generateTrainingData.MAP_MEM": "120",
+  "generateTrainingData.VG_CONTAINER": "quay.io/vgteam/vg:v1.36.0",
+  "generateTrainingData.GIRAFFE_OPTIONS": "--prune-low-cplx"
+}

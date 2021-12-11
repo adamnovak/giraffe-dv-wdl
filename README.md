@@ -9,3 +9,5 @@ resulting VCF against a truth set.
 
 `generate_training_data.wdl` runs Giraffe and the indel realignment against a
 series of samples, to generate DeepVariant training data.
+
+

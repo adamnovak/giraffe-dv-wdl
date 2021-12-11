@@ -1,0 +1,20 @@
+{
+  "vgMultiMap.XG_FILE": "graph.xg",
+  "vgMultiMap.GBWT_FILE": "graph.gbwt",
+  "vgMultiMap.GGBWT_FILE": "graph.gg",
+  "vgMultiMap.MIN_FILE": "graph.min",
+  "vgMultiMap.DIST_FILE": "graph.dist",
+  "vgMultiMap.REFERENCE_FASTA_FILE": "ref.fa",
+  "vgMultiMap.SAMPLE_NAME": "s0",
+  "vgMultiMap.INPUT_READ_FILE_1": "reads_s0_1.fastq.gz",
+  "vgMultiMap.INPUT_READ_FILE_2": "reads_s0_2.fastq.gz",
+  "vgMultiMap.MIN_MAPQ": "1",
+  "vgMultiMap.LEFTALIGN_BAM": "false",
+  "vgMultiMap.REALIGNMENT_EXPANSION_BASES": "160",
+  "vgMultiMap.SPLIT_READ_DISK": "60",
+  "vgMultiMap.MAP_DISK": "200",
+  "vgMultiMap.MAP_MEM": "120",
+  "vgMultiMap.VG_CONTAINER": "quay.io/vgteam/vg:v1.36.0",
+  "vgMultiMap.GIRAFFE_OPTIONS": "--prune-low-cplx"
+}
+
