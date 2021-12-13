@@ -9,7 +9,7 @@
   "vgMultiMap.INPUT_READ_FILE_1": "reads_s0_1.fastq.gz",
   "vgMultiMap.INPUT_READ_FILE_2": "reads_s0_2.fastq.gz",
   "vgMultiMap.MIN_MAPQ": "1",
-  "vgMultiMap.LEFTALIGN_BAM": "false",
+  "vgMultiMap.LEFTALIGN_BAM": "true",
   "vgMultiMap.REALIGNMENT_EXPANSION_BASES": "160",
   "vgMultiMap.SPLIT_READ_DISK": "60",
   "vgMultiMap.MAP_DISK": "200",

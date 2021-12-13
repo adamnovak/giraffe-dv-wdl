@@ -31,6 +31,7 @@ workflow vgMultiMap {
         String MAKE_EX_ARGS = "normalize_reads=true,keep_legacy_allele_counter_behavior=true" # additional arguments for the make_examples step of DV
         Int MIN_MAPQ = 1                                # Minimum MAPQ of reads to use for calling. 4 is the lowest at which a mapping is more likely to be right than wrong.
         Boolean LEFTALIGN_BAM = true                    # Whether or not to left-align reads in the BAM before DV
+        Boolean REALIGN_INDELS = true                   # Whether or not to realign reads near indels
         Int REALIGNMENT_EXPANSION_BASES = 160           # Number of bases to expand indel realignment targets by on either side, to free up read tails in slippery regions.
         Int SPLIT_READ_CORES = 8
         Int SPLIT_READ_DISK = 10
@@ -217,8 +218,44 @@ workflow vgMultiMap {
                 in_map_mem=MAP_MEM
             }
         }
-        File calling_bam = select_first([leftShiftBAMFile.left_shifted_bam, deepvariant_caller_input_files.left])
-        File calling_bam_index = select_first([indexBAMFile.bam_index, deepvariant_caller_input_files.right])
+        if (REALIGN_INDELS) {
+            File forrealign_bam = select_first([leftShiftBAMFile.left_shifted_bam, deepvariant_caller_input_files.left])
+            File forrealign_index = select_first([indexBAMFile.bam_index, deepvariant_caller_input_files.right])
+            # Do indel realignment
+            call runGATKRealignerTargetCreator {
+                input:
+                    in_sample_name=SAMPLE_NAME,
+                    in_bam_file=forrealign_bam,
+                    in_bam_index_file=forrealign_index,
+                    in_reference_file=reference_file,
+                    in_reference_index_file=reference_index_file,
+                    in_reference_dict_file=reference_dict_file,
+                    in_call_disk=CALL_DISK
+            }
+            if (REALIGNMENT_EXPANSION_BASES != 0) {
+                # We want the realignment targets to be wider
+                call widenRealignmentTargets {
+                    input:
+                        in_target_bed_file=runGATKRealignerTargetCreator.realigner_target_bed,
+                        in_reference_index_file=reference_index_file,
+                        in_expansion_bases=REALIGNMENT_EXPANSION_BASES,
+                        in_call_disk=CALL_DISK
+                }
+            }
+            File target_bed_file = select_first([widenRealignmentTargets.output_target_bed_file, runGATKRealignerTargetCreator.realigner_target_bed])
+            call runAbraRealigner {
+                input:
+                    in_sample_name=SAMPLE_NAME,
+                    in_bam_file=forrealign_bam,
+                    in_bam_index_file=forrealign_index,
+                    in_target_bed_file=target_bed_file,
+                    in_reference_file=reference_file,
+                    in_reference_index_file=reference_index_file,
+                    in_call_disk=CALL_DISK
+            }
+        }
+        File calling_bam = select_first([runAbraRealigner.indel_realigned_bam, leftShiftBAMFile.left_shifted_bam, deepvariant_caller_input_files.left])
+        File calling_bam_index = select_first([runAbraRealigner.indel_realigned_bam_index, indexBAMFile.bam_index, deepvariant_caller_input_files.right])
         call runDeepVariant {
             input:
                 in_sample_name=SAMPLE_NAME,
@@ -738,6 +775,159 @@ task splitBAMbyPath {
     }
 }
 
+task runGATKRealignerTargetCreator {
+    input {
+        String in_sample_name
+        File in_bam_file
+        File in_bam_index_file
+        File in_reference_file
+        File in_reference_index_file
+        File in_reference_dict_file
+        Int in_call_disk
+    }
+
+    command <<<
+        # Set the exit code of a pipeline to that of the rightmost command 
+        # to exit with a non-zero status, or zero if all commands of the pipeline exit 
+        set -o pipefail
+        # cause a bash script to exit immediately when a command fails 
+        set -e
+        # cause the bash shell to treat unset variables as an error and exit immediately 
+        set -u
+        # echo each line of the script to stdout so we can see what is happening 
+        set -o xtrace
+        #to turn off echo do 'set +o xtrace' 
+
+        ln -f -s ~{in_bam_file} input_bam_file.bam
+        ln -f -s ~{in_bam_index_file} input_bam_file.bam.bai
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g | sed s/.indel_realigned$//g | sed s/.left_shifted$//g))
+
+        # Reference and its index must be adjacent and not at arbitrary paths
+        # the runner gives.
+        ln -f -s "~{in_reference_file}" reference.fa
+        ln -f -s "~{in_reference_index_file}" reference.fa.fai
+        # And the dict must be adjacent to both
+        ln -f -s "~{in_reference_dict_file}" reference.dict
+
+        java -jar /usr/GenomeAnalysisTK.jar -T RealignerTargetCreator \
+          --remove_program_records \
+          -drf DuplicateRead \
+          --disable_bam_indexing \
+          -nt "32" \
+          -R reference.fa \
+          -L ${CONTIG_ID} \
+          -I input_bam_file.bam \
+          --out forIndelRealigner.intervals
+
+        awk -F '[:-]' 'BEGIN { OFS = "\t" } { if( $3 == "") { print $1, $2-1, $2 } else { print $1, $2-1, $3}}' forIndelRealigner.intervals > ~{in_sample_name}.${CONTIG_ID}.intervals.bed
+    >>>
+    output {
+        File realigner_target_bed = glob("*.bed")[0]
+    }
+    runtime {
+        preemptible: 2
+        time: 180
+        memory: 20 + " GB"
+        cpu: 16
+        disks: "local-disk " + in_call_disk + " SSD"
+        docker: "broadinstitute/gatk3@sha256:5ecb139965b86daa9aa85bc531937415d9e98fa8a6b331cb2b05168ac29bc76b"
+    }
+}
+
+task widenRealignmentTargets {
+    input {
+        File in_target_bed_file
+        File in_reference_index_file
+        Int in_expansion_bases
+        Int in_call_disk
+    }
+
+    command <<<
+        # Set the exit code of a pipeline to that of the rightmost command
+        # to exit with a non-zero status, or zero if all commands of the pipeline exit
+        set -o pipefail
+        # cause a bash script to exit immediately when a command fails
+        set -e
+        # cause the bash shell to treat unset variables as an error and exit immediately
+        set -u
+        # echo each line of the script to stdout so we can see what is happening
+        set -o xtrace
+        #to turn off echo do 'set +o xtrace'
+        
+        BASE_NAME=($(ls ~{in_target_bed_file} | rev | cut -f1 -d'/' | rev | sed s/.bed$//g))
+
+        # Widen the BED regions, but don't escape the chromosomes
+        bedtools slop -i "~{in_target_bed_file}" -g "~{in_reference_index_file}" -b "~{in_expansion_bases}" > "${BASE_NAME}.widened.bed"
+    >>>
+    output {
+        File output_target_bed_file = glob("*.widened.bed")[0]
+    }
+    runtime {
+        preemptible: 2
+        memory: 4 + " GB"
+        cpu: 1
+        disks: "local-disk " + in_call_disk + " SSD"
+        docker: "biocontainers/bedtools:v2.27.1dfsg-4-deb_cv1"
+    }
+}
+
+task runAbraRealigner {
+    input {
+        String in_sample_name
+        File in_bam_file
+        File in_bam_index_file
+        File in_target_bed_file
+        File in_reference_file
+        File in_reference_index_file
+        Int in_call_disk
+    }
+
+    command <<<
+        # Set the exit code of a pipeline to that of the rightmost command
+        # to exit with a non-zero status, or zero if all commands of the pipeline exit
+        set -o pipefail
+        # cause a bash script to exit immediately when a command fails
+        set -e
+        # cause the bash shell to treat unset variables as an error and exit immediately
+        set -u
+        # echo each line of the script to stdout so we can see what is happening
+        set -o xtrace
+        #to turn off echo do 'set +o xtrace'
+
+        ln -f -s ~{in_bam_file} input_bam_file.bam
+        ln -f -s ~{in_bam_index_file} input_bam_file.bam.bai
+        CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g | sed s/.indel_realigned$//g | sed s/.left_shifted$//g))
+
+        # Reference and its index must be adjacent and not at arbitrary paths
+        # the runner gives.
+        ln -f -s ~{in_reference_file} reference.fa
+        ln -f -s ~{in_reference_index_file} reference.fa.fai
+
+        java -Xmx20G -jar /opt/abra2/abra2.jar \
+          --targets ~{in_target_bed_file} \
+          --in input_bam_file.bam \
+          --out ~{in_sample_name}.${CONTIG_ID}.indel_realigned.bam \
+          --ref reference.fa \
+          --index \
+          --threads 32
+    >>>
+    output {
+        File indel_realigned_bam = glob("~{in_sample_name}.*.indel_realigned.bam")[0]
+        File indel_realigned_bam_index = glob("~{in_sample_name}.*.indel_realigned*bai")[0]
+    }
+    runtime {
+        preemptible: 2
+        time: 180
+        memory: 20 + " GB"
+        cpu: 16
+        disks: "local-disk " + in_call_disk + " SSD"
+        # This used to be docker: "dceoy/abra2:latest" but they moved the tag
+        # and it stopped working. A known good version has been rehosted on
+        # Quay in case Docker Hub deletes it.
+        docker: "quay.io/adamnovak/dceoy-abra2@sha256:43d09d1c10220cfeab09e2763c2c5257884fa4457bcaa224f4e3796a28a24bba"
+    }
+}
+
 task leftShiftBAMFile {
     input {
         String in_sample_name
@@ -872,7 +1062,7 @@ task runDeepVariant {
         gpuCount: 1
         nvidiaDriverVersion: "418.87.00"
         disks: "local-disk " + in_call_disk + " SSD"
-        docker: "google/deepvariant:1.3.0"
+        docker: "google/deepvariant:1.3.0-gpu"
     }
 }
 
