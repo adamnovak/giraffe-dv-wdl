@@ -14,9 +14,9 @@ workflow vgMultiMap {
         String VG_CONTAINER = "quay.io/vgteam/vg:v1.36.0"
         Int READS_PER_CHUNK = 20000000                  # Number of reads contained in each mapping chunk (20000000 for wgs)
         String? GIRAFFE_OPTIONS                         # (OPTIONAL) extra command line options for Giraffe mapper
-        File? PATH_LIST_FILE                            # (OPTIONAL) Text file where each line is a path name in the XG index. If not given, paths are extracted from the XG and subset to chromosome-looking paths.  Note that they will usually have the GRCh38. prefix.
+        Array[String]+? CONTIGS                         # (OPTIONAL) Desired reference genome contigs, which are all paths in the XG index.
+        File? PATH_LIST_FILE                            # (OPTIONAL) Text file where each line is a path name in the XG index, to use instead of CONTIGS. If neither is given, paths are extracted from the XG and subset to chromosome-looking paths.
         String REFERENCE_PREFIX = ""                    # Remove this off the beginning of path names in surjected BAM (set to match prefix in PATH_LIST_FILE)
-        File? REFERENCE_FASTA_FILE                      # (OPTIONAL) Use this reference instead of extracting paths from the XG. Required if the graph does not contain the entire reference (ex when making GRCh38 calls on a CHM13-based graph).  Must be uncompressed
         File XG_FILE                                    # Path to .xg index file
         File GBWT_FILE                                  # Path to .gbwt index file
         File GGBWT_FILE                                 # Path to .gg index file
@@ -28,11 +28,12 @@ workflow vgMultiMap {
         File? DV_MODEL_META                             # .meta file for a custom DeepVariant calling model
         File? DV_MODEL_INDEX                            # .index file for a custom DeepVariant calling model
         File? DV_MODEL_DATA                             # .data-00000-of-00001 file for a custom DeepVariant calling model
-        String MAKE_EX_ARGS = "normalize_reads=true,keep_legacy_allele_counter_behavior=true" # additional arguments for the make_examples step of DV
-        Int MIN_MAPQ = 1                                # Minimum MAPQ of reads to use for calling. 4 is the lowest at which a mapping is more likely to be right than wrong.
-        Boolean LEFTALIGN_BAM = true                    # Whether or not to left-align reads in the BAM before DV
-        Boolean REALIGN_INDELS = true                   # Whether or not to realign reads near indels
+        Boolean LEFTALIGN_BAM = false                   # Whether or not to left-align reads in the BAM before DV
+        Boolean REALIGN_INDELS = false                  # Whether or not to realign reads near indels
         Int REALIGNMENT_EXPANSION_BASES = 160           # Number of bases to expand indel realignment targets by on either side, to free up read tails in slippery regions.
+        Int MIN_MAPQ = 1                                # Minimum MAPQ of reads to use for calling. 4 is the lowest at which a mapping is more likely to be right than wrong.
+        Boolean DV_KEEP_LEGACY_AC = true                # Should DV use the legacy allele counter behavior?
+        Boolean DV_NORM_READS = true                    # Should SV normalize reads?
         Int SPLIT_READ_CORES = 8
         Int SPLIT_READ_DISK = 10
         Int MAP_CORES = 16
@@ -41,6 +42,9 @@ workflow vgMultiMap {
         Int CALL_CORES = 8
         Int CALL_DISK = 40
         Int CALL_MEM = 50
+        File? REFERENCE_FILE
+        File? REFERENCE_INDEX_FILE
+        File? REFERENCE_DICT_FILE
     }
 
     # Split input reads into chunks for parallelized mapping
@@ -63,53 +67,58 @@ workflow vgMultiMap {
             in_split_read_disk=SPLIT_READ_DISK
     }
 
-    if (!defined(PATH_LIST_FILE)) {
-        # Extract path names to call against from xg file if PATH_LIST_FILE input not provided
-        call extractPathNames {
-            input:
-                in_xg_file=XG_FILE,
-                in_vg_container=VG_CONTAINER,
-                in_extract_disk=MAP_DISK,
-                in_extract_mem=MAP_MEM
+    # Which path names to work on?
+    if (!defined(CONTIGS)) {
+        if (!defined(PATH_LIST_FILE)) {
+            # Extract path names to call against from xg file if PATH_LIST_FILE input not provided
+            # Filter down to major paths, because GRCh38 includes thousands of
+            # decoys and unplaced/unlocalized contigs, and we can't efficiently
+            # scatter across them, nor do we care about accuracy on them, and also
+            # calling on the decoys is semantically meaningless.
+            call extractSubsetPathNames {
+                input:
+                    in_xg_file=XG_FILE,
+                    in_vg_container=VG_CONTAINER,
+                    in_extract_disk=MAP_DISK,
+                    in_extract_mem=MAP_MEM
+            }
         }
-        # Filter down to major paths, because GRCh38 includes thousands of
-        # decoys and unplaced/unlocalized contigs, and we can't efficiently
-        # scatter across them, nor do we care about accuracy on them, and also
-        # calling on the decoys is semantically meaningless.
-        call subsetPathNames {
-            input:
-                in_path_list_file=extractPathNames.output_path_list_file
-        }
+    } 
+    if (defined(CONTIGS)) {
+        # Put the paths in a file to use later. We know the value is defined,
+        # but WDL is a bit low on unboxing calls for optionals so we use
+        # select_first.
+        File written_path_names_file = write_lines(select_first([CONTIGS]))
     }
-    File pipeline_path_list_file = select_first([PATH_LIST_FILE, subsetPathNames.output_path_list_file])
-
-    if (!defined(REFERENCE_FASTA_FILE)) {
-        # To make sure that we have a FASTA reference with a contig set that
-        # exactly matches the graph, we generate it ourselves, from the graph.
+    File pipeline_path_list_file = select_first([PATH_LIST_FILE, extractSubsetPathNames.output_path_list_file, written_path_names_file])
+    
+    # To make sure that we have a FASTA reference with a contig set that
+    # exactly matches the graph, we generate it ourselves, from the graph.
+    if (!defined(REFERENCE_FILE)) {
         call extractReference {
             input:
                 in_xg_file=XG_FILE,
+                in_path_list_file=pipeline_path_list_file,
                 in_vg_container=VG_CONTAINER,
                 in_extract_disk=MAP_DISK,
                 in_extract_mem=MAP_MEM
         }
     }
-    File base_reference_file = select_first([REFERENCE_FASTA_FILE, extractReference.reference_file])
+    File reference_file = select_first([REFERENCE_FILE, extractReference.reference_file])
     
-    # Subset FASTA to paths we care about and make a dict of it and just those paths.
-    call indexReference {
-        input:
-            in_path_list_file=pipeline_path_list_file,
-            in_base_reference_file=base_reference_file,
-            in_index_disk=MAP_DISK,
-            in_index_mem=MAP_MEM
+    if (!defined(REFERENCE_INDEX_FILE)) {
+        call indexReference {
+            input:
+                in_reference_file=reference_file,
+                in_index_disk=MAP_DISK,
+                in_index_mem=MAP_MEM
+        }
     }
-    File reference_file = indexReference.reference_file
-    File reference_index_file = indexReference.reference_index_file
-    File reference_dict_file = indexReference.reference_dict_file
+    File reference_index_file = select_first([REFERENCE_INDEX_FILE, indexReference.reference_index_file])
+    File reference_dict_file = select_first([REFERENCE_DICT_FILE, indexReference.reference_dict_file])
 
     ################################################################
-    # Distribute vg mapping opperation over each chunked read pair #
+    # Distribute vg mapping operation over each chunked read pair #
     ################################################################
     Array[Pair[File,File]] read_pair_chunk_files_list = zip(firstReadPair.output_read_chunks, secondReadPair.output_read_chunks)
     scatter (read_pair_chunk_files in read_pair_chunk_files_list) {
@@ -142,7 +151,7 @@ workflow vgMultiMap {
         }
         if (REFERENCE_PREFIX != "") {
             # use samtools to replace the header contigs with those from our dict.
-            # this is allows the header to contain contigs that are not in the graph,
+            # this allows the header to contain contigs that are not in the graph,
             # which is more general and lets CHM13-based graphs be used to call on GRCh38
             # also, strip out contig prefixes in the BAM body
             call fixBAMContigNaming {
@@ -198,7 +207,12 @@ workflow vgMultiMap {
             in_map_disk=MAP_DISK,
             in_map_mem=MAP_MEM
     }
+
+    ##
+    ## Call variants with DeepVariant in each contig
+    ##
     scatter (deepvariant_caller_input_files in zip(splitBAMbyPath.bam_contig_files, splitBAMbyPath.bam_contig_files_index)) {
+        ## Evantually shift and realign reads
         if (LEFTALIGN_BAM){
             # Just left-shift each read individually
             call leftShiftBAMFile {
@@ -256,18 +270,31 @@ workflow vgMultiMap {
         }
         File calling_bam = select_first([runAbraRealigner.indel_realigned_bam, leftShiftBAMFile.left_shifted_bam, deepvariant_caller_input_files.left])
         File calling_bam_index = select_first([runAbraRealigner.indel_realigned_bam_index, indexBAMFile.bam_index, deepvariant_caller_input_files.right])
-        call runDeepVariant {
+        ## DeepVariant calling
+        call runDeepVariantMakeExamples {
             input:
                 in_sample_name=SAMPLE_NAME,
                 in_bam_file=calling_bam,
                 in_bam_file_index=calling_bam_index,
                 in_reference_file=reference_file,
                 in_reference_index_file=reference_index_file,
+                in_min_mapq=MIN_MAPQ,
+                in_keep_legacy_ac=DV_KEEP_LEGACY_AC,
+                in_norm_reads=DV_NORM_READS,
+                in_call_cores=CALL_CORES,
+                in_call_disk=CALL_DISK,
+                in_call_mem=CALL_MEM
+        }
+        call runDeepVariantCallVariants {
+            input:
+                in_sample_name=SAMPLE_NAME,
+                in_reference_file=reference_file,
+                in_reference_index_file=reference_index_file,
+                in_examples_file=runDeepVariantMakeExamples.examples_file,
+                in_nonvariant_site_tf_file=runDeepVariantMakeExamples.nonvariant_site_tf_file,
                 in_model_meta_file=DV_MODEL_META,
                 in_model_index_file=DV_MODEL_INDEX,
                 in_model_data_file=DV_MODEL_DATA,
-                in_make_examples_args=MAKE_EX_ARGS,
-                in_min_mapq=MIN_MAPQ,
                 in_call_cores=CALL_CORES,
                 in_call_disk=CALL_DISK,
                 in_call_mem=CALL_MEM
@@ -277,7 +304,7 @@ workflow vgMultiMap {
     call concatClippedVCFChunks {
         input:
             in_sample_name=SAMPLE_NAME,
-            in_clipped_vcf_chunk_files=runDeepVariant.output_vcf_file,
+            in_clipped_vcf_chunk_files=runDeepVariantCallVariants.output_vcf_file,
             in_call_disk=CALL_DISK,
             in_call_mem=CALL_MEM
     }
@@ -379,7 +406,7 @@ task splitReads {
     }
 }
 
-task extractPathNames {
+task extractSubsetPathNames {
     input {
         File in_xg_file
         String in_vg_container
@@ -393,9 +420,11 @@ task extractPathNames {
         vg paths \
             --list \
             --xg ${in_xg_file} > path_list.txt
+
+        grep -v _decoy path_list.txt | grep -v _random |  grep -v chrUn_ | grep -v chrEBV | grep -v chrM > path_list.sub.txt
     }
     output {
-        File output_path_list_file = "path_list.txt"
+        File output_path_list_file = "path_list.sub.txt"
     }
     runtime {
         preemptible: 2
@@ -405,30 +434,10 @@ task extractPathNames {
     }
 }
 
-task subsetPathNames {
-    input {
-        File in_path_list_file
-    }
-
-    command <<<
-        set -eux -o pipefail
-
-        grep -v _decoy ~{in_path_list_file} | grep -v _random |  grep -v chrUn_ | grep -v chrEBV | grep -v chrM > path_list.txt
-    >>>
-    output {
-        File output_path_list_file = "path_list.txt"
-    }
-    runtime {
-        preemptible: 2
-        memory: "1 GB"
-        disks: "local-disk 10 SSD"
-        docker: "ubuntu:20.04"
-    }
-}
-
 task extractReference {
     input {
         File in_xg_file
+        File in_path_list_file
         String in_vg_container
         Int in_extract_disk
         Int in_extract_mem
@@ -437,9 +446,12 @@ task extractReference {
     command {
         set -eux -o pipefail
 
+        # Subset to just the paths we care about (may be the whole file) so we
+        # get a good dict with just those paths later
         vg paths \
-            --extract-fasta \
-            --xg ${in_xg_file} > ref.fa
+           --extract-fasta \
+           -p ${in_path_list_file} \
+           --xg ${in_xg_file} > ref.fa
     }
     output {
         File reference_file = "ref.fa"
@@ -454,8 +466,7 @@ task extractReference {
 
 task indexReference {
     input {
-        File in_path_list_file
-        File in_base_reference_file
+        File in_reference_file
         Int in_index_mem
         Int in_index_disk
     }
@@ -463,13 +474,8 @@ task indexReference {
     command <<<
         set -eux -o pipefail
         
-        ln -s ~{in_base_reference_file} base.fa
-        
-        # Subset to just the paths we care about (may be the whole file) so we
-        # get a good dict with just those paths, becuse they must exist in the
-        # graph.
-        samtools faidx base.fa $(cat ~{in_path_list_file}) >ref.fa
-        
+        ln -s ~{in_reference_file} ref.fa
+                
         # Index the subset reference
         samtools faidx ref.fa 
         
@@ -479,7 +485,6 @@ task indexReference {
           O=ref.dict
     >>>
     output {
-        File reference_file = "ref.fa"
         File reference_index_file = "ref.fa.fai"
         File reference_dict_file = "ref.dict"
     }
@@ -975,18 +980,17 @@ task leftShiftBAMFile {
     }
 }
 
-task runDeepVariant {
+
+task runDeepVariantMakeExamples {
     input {
         String in_sample_name
         File in_bam_file
         File in_bam_file_index
         File in_reference_file
         File in_reference_index_file
-        File? in_model_meta_file
-        File? in_model_index_file
-        File? in_model_data_file
-        String in_make_examples_args
         Int in_min_mapq
+        Boolean in_keep_legacy_ac
+        Boolean in_norm_reads
         Int in_call_cores
         Int in_call_disk
         Int in_call_mem
@@ -1004,8 +1008,8 @@ task runDeepVariant {
         set -o xtrace
         #to turn off echo do 'set +o xtrace'
         
-        ln -s ~{in_bam_file} input_bam_file.child.bam
-        ln -s ~{in_bam_file_index} input_bam_file.child.bam.bai
+        ln -s ~{in_bam_file} input_bam_file.bam
+        ln -s ~{in_bam_file_index} input_bam_file.bam.bai
         # Files may or may not be indel realigned or left shifted in the names.
         # TODO: move tracking of contig ID to WDL variables!
         CONTIG_ID=($(ls ~{in_bam_file} | rev | cut -f1 -d'/' | rev | sed s/^~{in_sample_name}.//g | sed s/.bam$//g | sed s/.indel_realigned$//g | sed s/.left_shifted$//g))
@@ -1014,50 +1018,115 @@ task runDeepVariant {
         # the runner gives.
         ln -f -s ~{in_reference_file} reference.fa
         ln -f -s ~{in_reference_index_file} reference.fa.fai
+                
+        NORM_READS_ARG=""
+        if [ ~{in_norm_reads} == true ]; then
+          NORM_READS_ARG="--normalize_reads"
+        fi
+
+        KEEP_LEGACY_AC_ARG=""
+        if [ ~{in_keep_legacy_ac} == true ]; then
+          KEEP_LEGACY_AC_ARG="--keep_legacy_allele_counter_behavior"
+        fi
+
+        seq 0 $((~{in_call_cores}-1)) | \
+        parallel -q --halt 2 --line-buffer /opt/deepvariant/bin/make_examples \
+        --mode calling \
+        --ref reference.fa \
+        --reads input_bam_file.bam \
+        --examples ./make_examples.tfrecord@~{in_call_cores}.gz \
+        --sample_name ~{in_sample_name} \
+        --gvcf ./gvcf.tfrecord@~{in_call_cores}.gz \
+        --min_mapping_quality ~{in_min_mapq} \
+        ${KEEP_LEGACY_AC_ARG} ${NORM_READS_ARG} \
+        --regions ${CONTIG_ID} \
+        --task {}
+        ls | grep 'make_examples.tfrecord-' | tar -czf 'make_examples.tfrecord.tar.gz' -T -
+        ls | grep 'gvcf.tfrecord-' | tar -czf 'gvcf.tfrecord.tar.gz' -T -
+    >>>
+    output {
+        File examples_file = "make_examples.tfrecord.tar.gz"
+        File nonvariant_site_tf_file = "gvcf.tfrecord.tar.gz"
+    }
+    runtime {
+        preemptible: 5
+        maxRetries: 5
+        memory: in_call_mem + " GB"
+        cpu: in_call_cores
+        disks: "local-disk " + in_call_disk + " SSD"
+        docker: "google/deepvariant:1.3.0"
+    }
+}
+
+task runDeepVariantCallVariants {
+    input {
+        String in_sample_name
+        File in_reference_file
+        File in_reference_index_file
+        File in_examples_file
+        File in_nonvariant_site_tf_file
+        File? in_model_meta_file
+        File? in_model_index_file
+        File? in_model_data_file
+        Int in_call_cores
+        Int in_call_disk
+        Int in_call_mem
+    }
+    
+    command <<<
+        # Set the exit code of a pipeline to that of the rightmost command
+        # to exit with a non-zero status, or zero if all commands of the pipeline exit
+        set -o pipefail
+        # cause a bash script to exit immediately when a command fails
+        set -e
+        # cause the bash shell to treat unset variables as an error and exit immediately
+        set -u
+        # echo each line of the script to stdout so we can see what is happening
+        set -o xtrace
+        #to turn off echo do 'set +o xtrace'
         
+        tar -xzf ~{in_examples_file}
+        tar -xzf ~{in_nonvariant_site_tf_file}
+        
+        # Reference and its index must be adjacent and not at arbitrary paths
+        # the runner gives.
+        ln -f -s ~{in_reference_file} reference.fa
+        ln -f -s ~{in_reference_index_file} reference.fa.fai
+
         # We should use an array here, but that doesn't seem to work the way I
         # usually do them (because of a set -u maybe?)
-        MODEL_ARGS=""
         if [[ ! -z "~{in_model_meta_file}" ]] ; then
             # Model files must be adjacent and not at arbitrary paths
             ln -f -s "~{in_model_meta_file}" model.meta
             ln -f -s "~{in_model_index_file}" model.index
             ln -f -s "~{in_model_data_file}" model.data-00000-of-00001
-            MODEL_ARGS="--customized_model model"
+        else
+            # use default WGS models
+            ln -f -s "/opt/models/wgs/model.ckpt.meta" model.meta
+            ln -f -s "/opt/models/wgs/model.ckpt.index" model.index
+            ln -f -s "/opt/models/wgs/model.ckpt.data-00000-of-00001" model.data-00000-of-00001
         fi
-
-        # specify flags for the make_examples step of DV
-        # for example, read normalization
-        MAKE_EXAMPLES_ARGS=""
-        if [ ~{in_make_examples_args} != "" ]; then
-            MAKE_EXAMPLES_ARGS=",~{in_make_examples_args}"
-        fi
-        echo ${MAKE_EXAMPLES_ARGS}
         
-        # When making examples, throw out any reads that are more likely to be
-        # mismapped than not (MAPQ 3 or less)
-        /opt/deepvariant/bin/run_deepvariant \
-        --make_examples_extra_args 'min_mapping_quality=~{in_min_mapq}${MAKE_EXAMPLES_ARGS}' \
-        --model_type=WGS \
-        --regions ${CONTIG_ID} \
-        --ref=reference.fa \
-        --reads=input_bam_file.child.bam \
-        --output_vcf="~{in_sample_name}_deepvariant.vcf.gz" \
-        --output_gvcf="~{in_sample_name}_deepvariant.g.vcf.gz" \
-        --intermediate_results_dir=tmp_deepvariant \
-        ${MODEL_ARGS} \
-        --num_shards=16
+        /opt/deepvariant/bin/call_variants \
+        --outfile call_variants_output.tfrecord.gz \
+        --examples "make_examples.tfrecord@~{in_call_cores}.gz" \
+        --checkpoint model && \
+        /opt/deepvariant/bin/postprocess_variants \
+        --ref reference.fa \
+        --infile call_variants_output.tfrecord.gz \
+        --nonvariant_site_tfrecord_path "gvcf.tfrecord@~{in_call_cores}.gz" \
+        --outfile "~{in_sample_name}_deepvariant.vcf.gz" \
+        --gvcf_outfile "~{in_sample_name}_deepvariant.g.vcf.gz"
     >>>
     output {
         File output_vcf_file = "~{in_sample_name}_deepvariant.vcf.gz"
         File output_gvcf_file = "~{in_sample_name}_deepvariant.g.vcf.gz"
     }
     runtime {
-        preemptible: 2
-        # Terra will fail the job randomly and complain it couldn't install the GPU driver, so retry
-        maxRetries: 3
+        preemptible: 5
+        maxRetries: 5
         memory: in_call_mem + " GB"
-        cpu: 8
+        cpu: in_call_cores
         gpuType: "nvidia-tesla-t4"
         gpuCount: 1
         nvidiaDriverVersion: "418.87.00"
